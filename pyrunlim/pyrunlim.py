@@ -63,76 +63,84 @@ class TextOutput:
     def __init__(self, process):
         self.process = process
         
+    def print(self, msg):
+        print("[pyrunlim] %s" % msg, file=self.process.log)
+        self.process.log.flush()
+        
     def report(self):
-        print("[pyrunlim] sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap), file=self.process.log)
+        self.print("[pyrunlim] sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
     def begin(self):
-        print("[pyrunlim] version:\t\t%s" % VERSION, file=self.process.log)
-        print("[pyrunlim] time limit:\t\t%d seconds" % self.process.timelimit, file=self.process.log)
-        print("[pyrunlim] memory limit:\t%d MB" % self.process.memorylimit, file=self.process.log)
-        print("[pyrunlim] real time limit:\t%d seconds" % self.process.realtimelimit, file=self.process.log)
-        print("[pyrunlim] swap limit:\t\t%d MB" % self.process.swaplimit, file=self.process.log)
-        print("[pyrunlim] cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]), file=self.process.log)
-        print("[pyrunlim] nice:\t\t%d" % self.process.nice, file=self.process.log)
-        print("[pyrunlim] running:\t\tbash -c \"%s\"" % " ".join(self.process.args), file=self.process.log)
-        print("[pyrunlim] start:\t\t%s" % time.strftime("%c"), file=self.process.log)
-        print("[pyrunlim] columns:\t\treal (s)\tuser (s)\tsys (s)  \tmax memory (MB)\trss (MB)   \tswap (MB)", file=self.process.log)
+        self.print("[pyrunlim] version:\t\t%s" % VERSION)
+        self.print("[pyrunlim] time limit:\t\t%d seconds" % self.process.timelimit)
+        self.print("[pyrunlim] memory limit:\t%d MB" % self.process.memorylimit)
+        self.print("[pyrunlim] real time limit:\t%d seconds" % self.process.realtimelimit)
+        self.print("[pyrunlim] swap limit:\t\t%d MB" % self.process.swaplimit)
+        self.print("[pyrunlim] cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]))
+        self.print("[pyrunlim] nice:\t\t%d" % self.process.nice)
+        self.print("[pyrunlim] running:\t\tbash -c \"%s\"" % " ".join(self.process.args))
+        self.print("[pyrunlim] start:\t\t%s" % time.strftime("%c"))
+        self.print("[pyrunlim] columns:\t\treal (s)\tuser (s)\tsys (s)  \tmax memory (MB)\trss (MB)   \tswap (MB)")
 
     def end(self):
-        print("[pyrunlim] end:  \t\t%s" % time.strftime("%c"), file=self.process.log)
-        print("[pyrunlim] status:\t\t%s" % self.process.status, file=self.process.log)
-        print("[pyrunlim] result:\t\t%s" % str(self.process.result), file=self.process.log)
+        self.print("[pyrunlim] end:  \t\t%s" % time.strftime("%c"))
+        self.print("[pyrunlim] status:\t\t%s" % self.process.status)
+        self.print("[pyrunlim] result:\t\t%s" % str(self.process.result))
         if self.process.redirectOutput or self.process.redirectError:
-            print("[pyrunlim] output:\t\t%s" % str(self.process.redirectOutput), file=self.process.log)
-            print("[pyrunlim] error:\t\t%s" % str(self.process.redirectError), file=self.process.log)
+            self.print("[pyrunlim] output:\t\t%s" % str(self.process.redirectOutput))
+            self.print("[pyrunlim] error:\t\t%s" % str(self.process.redirectError))
         else:
-            print("[pyrunlim] output+error:\t%s" % str(self.process.redirect), file=self.process.log)
-        print("[pyrunlim] children:\t\t%d" % len(self.process.subprocesses), file=self.process.log)
-        print("[pyrunlim] real:\t\t%.3f seconds" % self.process.real, file=self.process.log)
-        print("[pyrunlim] time:\t\t%.3f seconds" % (self.process.system + self.process.user), file=self.process.log)
-        print("[pyrunlim] user:\t\t%.3f seconds" % self.process.user, file=self.process.log)
-        print("[pyrunlim] system:\t\t%.3f seconds" % self.process.system, file=self.process.log)
-        print("[pyrunlim] memory:\t\t%.1f MB" % self.process.max_memory, file=self.process.log)
-        print("[pyrunlim] samples:\t\t%d" % self.process.samplings, file=self.process.log)
+            self.print("[pyrunlim] output+error:\t%s" % str(self.process.redirect))
+        self.print("[pyrunlim] children:\t\t%d" % len(self.process.subprocesses))
+        self.print("[pyrunlim] real:\t\t%.3f seconds" % self.process.real)
+        self.print("[pyrunlim] time:\t\t%.3f seconds" % (self.process.system + self.process.user))
+        self.print("[pyrunlim] user:\t\t%.3f seconds" % self.process.user)
+        self.print("[pyrunlim] system:\t\t%.3f seconds" % self.process.system)
+        self.print("[pyrunlim] memory:\t\t%.1f MB" % self.process.max_memory)
+        self.print("[pyrunlim] samples:\t\t%d" % self.process.samplings)
 
 class XmlOutput:
     def __init__(self, process):
         self.process = process
         
+    def print(self, msg):
+        print(msg, file=self.process.log)
+        self.process.log.flush()
+
     def report(self):
-        print("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap), file=self.process.log)
+        self.print("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
     def begin(self):
-        print("<pyrunlim version='%s'" % VERSION, file=self.process.log, end="")
-        print(" time-limit='%d'" % self.process.timelimit, file=self.process.log, end="")
-        print(" memory-limit='%d'" % self.process.memorylimit, file=self.process.log, end="")
-        print(" real-time-limit='%d'" % self.process.realtimelimit, file=self.process.log, end="")
-        print(" swap-limit='%d'" % self.process.swaplimit, file=self.process.log, end="")
-        print(" cpu-affinity='%s'" % ", ".join([str(a) for a in self.process.affinity]), file=self.process.log, end="")
-        print(" nice='%d'" % self.process.nice, file=self.process.log, end="")
-        print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;"), file=self.process.log, end="")
-        print(" start='%s'" % time.strftime("%c"), file=self.process.log, end="")
-        print(">", file=self.process.log)
+        self.print("<pyrunlim version='%s'" % VERSION, end="")
+        self.print(" time-limit='%d'" % self.process.timelimit, end="")
+        self.print(" memory-limit='%d'" % self.process.memorylimit, end="")
+        self.print(" real-time-limit='%d'" % self.process.realtimelimit, end="")
+        self.print(" swap-limit='%d'" % self.process.swaplimit, end="")
+        self.print(" cpu-affinity='%s'" % ", ".join([str(a) for a in self.process.affinity]), end="")
+        self.print(" nice='%d'" % self.process.nice, end="")
+        self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;"), end="")
+        self.print(" start='%s'" % time.strftime("%c"), end="")
+        self.print(">")
 
     def end(self):
-        print("<stats ", file=self.process.log, end="")
-        print(" end='%s'" % time.strftime("%c"), file=self.process.log, end="")
-        print(" status='%s'" % self.process.status, file=self.process.log, end="")
-        print(" result='%s'" % str(self.process.result), file=self.process.log, end="")
+        self.print("<stats ", end="")
+        self.print(" end='%s'" % time.strftime("%c"), end="")
+        self.print(" status='%s'" % self.process.status, end="")
+        self.print(" result='%s'" % str(self.process.result), end="")
         if self.process.redirectOutput or self.process.redirectError:
-            print(" output='%s'" % str(self.process.redirectOutput), file=self.process.log, end="")
-            print(" error='%s'" % str(self.process.redirectError), file=self.process.log, end="")
+            self.print(" output='%s'" % str(self.process.redirectOutput), end="")
+            self.print(" error='%s'" % str(self.process.redirectError), end="")
         else:
-            print(" output-and-error='%s'" % str(self.process.redirect), file=self.process.log, end="")
-        print(" children='%d'" % len(self.process.subprocesses), file=self.process.log, end="")
-        print(" real='%.3f'" % self.process.real, file=self.process.log, end="")
-        print(" time='%.3f'" % (self.process.system + self.process.user), file=self.process.log, end="")
-        print(" user='%.3f'" % self.process.user, file=self.process.log, end="")
-        print(" system='%.3f'" % self.process.system, file=self.process.log, end="")
-        print(" memory='%.1f'" % self.process.max_memory, file=self.process.log, end="")
-        print(" samples='%d'" % self.process.samplings, file=self.process.log, end="")
-        print("/>", file=self.process.log)
-        print("</pyrunlim>", file=self.process.log)
+            self.print(" output-and-error='%s'" % str(self.process.redirect), end="")
+        self.print(" children='%d'" % len(self.process.subprocesses), end="")
+        self.print(" real='%.3f'" % self.process.real, end="")
+        self.print(" time='%.3f'" % (self.process.system + self.process.user), end="")
+        self.print(" user='%.3f'" % self.process.user, end="")
+        self.print(" system='%.3f'" % self.process.system, end="")
+        self.print(" memory='%.1f'" % self.process.max_memory, end="")
+        self.print(" samples='%d'" % self.process.samplings, end="")
+        self.print("/>")
+        self.print("</pyrunlim>")
 
 class Subprocess:
     def __init__(self):
