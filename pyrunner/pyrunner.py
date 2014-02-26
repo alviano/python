@@ -9,6 +9,9 @@ import sys
 import time
 import os
 
+from output import *
+from validator import *
+
 VERSION = "1.0"
 
 def parseArguments(runner):
@@ -29,29 +32,6 @@ def parseArguments(runner):
     if args.fix_xml != None:
         runner.fixXml(args.fix_xml)
 
-class AllValidator:
-    def valid(self, command, benchmark, testcase, xml):
-        return True
-
-class ExitCodeValidator:
-    def __init__(self, validExitCodes=[0]):
-        self.validExitCodes = validExitCodes
-        
-    def valid(self, command, benchmark, testcase, xml):
-        return xml.xpath("//stats/@status = 'complete'") and int(xml.xpath("//stats/@result")[0]) in self.validExitCodes
-
-class AspCompetitionValidator:
-    def __init__(self, path):
-        global dirname
-        self.path = path.replace("$DIRNAME", dirname)
-        
-    def valid(self, command, benchmark, testcase, xml):
-        output_file = xml.xpath("//stats/@output")[0]
-        try:
-            lines = subprocess.check_output(["bash", "-c", "(cat %s; tail --lines=1 %s) | %s" % (testcase[1], output_file, self.path)])
-            return lines.decode().strip() == "OK"
-        except:
-            return False
         
 class Command:
     def __init__(self, id, command, dependencies=set(), validator=ExitCodeValidator()):
@@ -93,93 +73,6 @@ class Benchmark:
         
     def hasToSkip(self, command):
         return self.stopped is not None and command.id in self.stopped
-
-class TextOutput:
-    def __init__(self, runner):
-        self.runner = runner
-    
-    def print(self, msg):
-        print("[%10.3f] %s" % (time.time() - self.runner.beginTime, msg), file=self.runner.log)
-        
-    def begin(self):
-        self.print("Start")
-    
-    def end(self):
-        self.print("All done!")
-        
-    def beginBenchmark(self, benchmark):
-        self.print("    Processing benchmark %s" % benchmark.id)
-        
-    def endBenchmark(self, benchmark):
-        self.print("    done")
-    
-    def beginTestcase(self, testcase):
-        self.print("        Testing %s" % str(testcase))
-        
-    def endTestcase(self, testcase):
-        self.print("        done")
-        
-    def beginCommand(self, command):
-        self.print("            with %s" % command.id)
-    
-    def endCommand(self, command):
-        self.print("            done")
-        
-    def report(self, xml):
-        self.print("                status: %s" % xml.xpath("//stats/@status")[0])
-        self.print("                time: %s" % xml.xpath("//stats/@time")[0])
-        self.print("                memory: %s" % xml.xpath("//stats/@memory")[0])
-
-    def skip(self):
-        self.print("                skip")
-
-    def onValidRun(self):
-        self.print("                checker: valid")
-    def onInvalidRun(self):
-        self.print("                checker: invalid")
-        
-class XmlOutput:
-    def __init__(self, runner):
-        self.runner = runner
-    
-    def print(self, msg):
-        print(msg, file=self.runner.log)
-        
-    def begin(self):
-        self.print("<pyrunner>")
-    
-    def end(self):
-        self.print("</pyrunner>")
-        
-    def beginBenchmark(self, benchmark):
-        self.print("<benchmark id='%s'>" % benchmark.id)
-        
-    def endBenchmark(self, benchmark):
-        self.print("</benchmark>")
-    
-    def beginTestcase(self, testcase):
-        self.print("<testcase id=\"%s\">" % str(testcase))
-        
-    def endTestcase(self, testcase):
-        self.print("</testcase>")
-        
-    def beginCommand(self, command):
-        self.print("<command id='%s'>" % command.id)
-    
-    def endCommand(self, command):
-        self.print("</command>")
-        
-    def report(self, xml, ):
-        self.print(etree.tostring(xml).decode())
-        
-    def skip(self):
-        self.print("<skip />")
-    
-    def onValidRun(self):
-        self.print("<checker response='valid' />")
-    def onInvalidRun(self):
-        self.print("<checker response='invalid' />")
-    
 
 class Runner:
     def __init__(self, pyrunlim=[]):
@@ -281,7 +174,7 @@ class Runner:
 
 if __name__ == "__main__":
     """
-        This is an example main (actually, referring to a test not in this repository).
+        This is an example main.
         You should import this file and declare your own main function.
         In a nutshell, creare a Runner instance pointing to pyrunlim.
         Then, add commands to be tested and benchmarks to be run.
@@ -298,8 +191,8 @@ if __name__ == "__main__":
     ])
     parseArguments(runner)
     
-    runner.addCommand(Command("gringo+wasp", "gringo --shift $1 $4 | $DIRNAME/bin/wasp_mg --gringo --third-competition-output --filter=$2"))
+    runner.addCommand(Command("gringo+clasp", "gringo --shift $1 $2 | clasp"))
     
-    runner.addBenchmark(Benchmark("StableMarriageASP", sharedOptions=["$DIRNAME/StableMarriage/StrongStableMarriage.dl", "match"], testcases=sorted([(re.match(".*/StableMarriage/(\d+)-(\d+)", file).group(1), file, re.match(".*/StableMarriage/(\d+)-(\d+)", file).group(2)) for file in runner.executeAndSplit("ls $DIRNAME/StableMarriage/*.asp")]), validator=AspCompetitionValidator("$DIRNAME/StableMarriage/checker/checker")))
+    runner.addBenchmark(Benchmark("StableMarriageASP", sharedOptions=["$DIRNAME/StableMarriage/encoding.lp"], testcases=sorted([(file,) for file in runner.executeAndSplit("ls $DIRNAME/StableMarriage/*.asp")]), validator=ExitCodeValidator([10, 20, 30])))
 
     runner.run()
