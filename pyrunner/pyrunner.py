@@ -1,5 +1,25 @@
 #!/usr/bin/env python3.3
 
+GPL = """
+Run benchmarks.
+Copyright (C) 2014  Mario Alviano (mario@alviano.net)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+VERSION = "1.0"
+
 import argparse
 import fileinput
 from lxml import etree
@@ -12,11 +32,11 @@ import os
 from output import *
 from validator import *
 
-VERSION = "1.0"
-
 def parseArguments(runner):
-    parser = argparse.ArgumentParser(description='Run benchmarks.')
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s %(VERSION)s', help='print version number')
+    global VERSION
+    global GPL
+    parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2014  Mario Alviano (mario@alviano.net)")
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
     parser.add_argument('-f', '--fix-xml', metavar='<filename>', type=str, help="fix unclosed tags in xml file (and exit)")

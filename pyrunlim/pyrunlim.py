@@ -1,5 +1,25 @@
 #!/usr/bin/env python3.3
 
+GPL = """
+Run a command reporting statistics and possibly limiting usage of resources.
+Copyright (C) 2014  Mario Alviano (mario@alviano.net)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+VERSION = "1.0"
+
 import argparse
 import psutil
 import os
@@ -7,11 +27,11 @@ import sys
 import time
 import threading
 
-VERSION = "1.0"
-
 def parseArguments(process):
-    parser = argparse.ArgumentParser(description='Run a command reporting statistics and possibly limiting usage of resources.')
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s %(VERSION)s', help='print version number')
+    global VERSION
+    global GPL
+    parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2014  Mario Alviano (mario@alviano.net)")
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
     parser.add_argument('-t', '--time', metavar='<integer>', type=int, help='set time (user+sys) limit to <integer> seconds')
     parser.add_argument('-m', '--memory', metavar='<integer>', type=int, help='set memory (rss+swap) limit to <integer> MB')
     parser.add_argument('-r', '--realtime', metavar='<integer>', type=int, help='set real time limit to <integer> seconds')
@@ -104,43 +124,46 @@ class XmlOutput:
         self.process = process
         
     def print(self, msg):
+        print(msg, file=self.process.log, end="")
+
+    def println(self, msg):
         print(msg, file=self.process.log)
         self.process.log.flush()
 
     def report(self):
-        self.print("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
+        self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
     def begin(self):
-        self.print("<pyrunlim version='%s'" % VERSION, end="")
-        self.print(" time-limit='%d'" % self.process.timelimit, end="")
-        self.print(" memory-limit='%d'" % self.process.memorylimit, end="")
-        self.print(" real-time-limit='%d'" % self.process.realtimelimit, end="")
-        self.print(" swap-limit='%d'" % self.process.swaplimit, end="")
-        self.print(" cpu-affinity='%s'" % ", ".join([str(a) for a in self.process.affinity]), end="")
-        self.print(" nice='%d'" % self.process.nice, end="")
-        self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;"), end="")
-        self.print(" start='%s'" % time.strftime("%c"), end="")
-        self.print(">")
+        self.print("<pyrunlim version='%s'" % VERSION)
+        self.print(" time-limit='%d'" % self.process.timelimit)
+        self.print(" memory-limit='%d'" % self.process.memorylimit)
+        self.print(" real-time-limit='%d'" % self.process.realtimelimit)
+        self.print(" swap-limit='%d'" % self.process.swaplimit)
+        self.print(" cpu-affinity='%s'" % ", ".join([str(a) for a in self.process.affinity]))
+        self.print(" nice='%d'" % self.process.nice)
+        self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;"))
+        self.print(" start='%s'" % time.strftime("%c"))
+        self.println(">")
 
     def end(self):
-        self.print("<stats ", end="")
-        self.print(" end='%s'" % time.strftime("%c"), end="")
-        self.print(" status='%s'" % self.process.status, end="")
-        self.print(" result='%s'" % str(self.process.result), end="")
+        self.print("<stats ")
+        self.print(" end='%s'" % time.strftime("%c"))
+        self.print(" status='%s'" % self.process.status)
+        self.print(" result='%s'" % str(self.process.result))
         if self.process.redirectOutput or self.process.redirectError:
-            self.print(" output='%s'" % str(self.process.redirectOutput), end="")
-            self.print(" error='%s'" % str(self.process.redirectError), end="")
+            self.print(" output='%s'" % str(self.process.redirectOutput))
+            self.print(" error='%s'" % str(self.process.redirectError))
         else:
-            self.print(" output-and-error='%s'" % str(self.process.redirect), end="")
-        self.print(" children='%d'" % len(self.process.subprocesses), end="")
-        self.print(" real='%.3f'" % self.process.real, end="")
-        self.print(" time='%.3f'" % (self.process.system + self.process.user), end="")
-        self.print(" user='%.3f'" % self.process.user, end="")
-        self.print(" system='%.3f'" % self.process.system, end="")
-        self.print(" memory='%.1f'" % self.process.max_memory, end="")
-        self.print(" samples='%d'" % self.process.samplings, end="")
+            self.print(" output-and-error='%s'" % str(self.process.redirect))
+        self.print(" children='%d'" % len(self.process.subprocesses))
+        self.print(" real='%.3f'" % self.process.real)
+        self.print(" time='%.3f'" % (self.process.system + self.process.user))
+        self.print(" user='%.3f'" % self.process.user)
+        self.print(" system='%.3f'" % self.process.system)
+        self.print(" memory='%.1f'" % self.process.max_memory)
+        self.print(" samples='%d'" % self.process.samplings)
         self.print("/>")
-        self.print("</pyrunlim>")
+        self.println("</pyrunlim>")
 
 class Subprocess:
     def __init__(self):
