@@ -88,36 +88,36 @@ class TextOutput:
         self.process.log.flush()
         
     def report(self):
-        self.print("[pyrunlim] sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
+        self.print("sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
     def begin(self):
-        self.print("[pyrunlim] version:\t\t%s" % VERSION)
-        self.print("[pyrunlim] time limit:\t\t%d seconds" % self.process.timelimit)
-        self.print("[pyrunlim] memory limit:\t%d MB" % self.process.memorylimit)
-        self.print("[pyrunlim] real time limit:\t%d seconds" % self.process.realtimelimit)
-        self.print("[pyrunlim] swap limit:\t\t%d MB" % self.process.swaplimit)
-        self.print("[pyrunlim] cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]))
-        self.print("[pyrunlim] nice:\t\t%d" % self.process.nice)
-        self.print("[pyrunlim] running:\t\tbash -c \"%s\"" % " ".join(self.process.args))
-        self.print("[pyrunlim] start:\t\t%s" % time.strftime("%c"))
-        self.print("[pyrunlim] columns:\t\treal (s)\tuser (s)\tsys (s)  \tmax memory (MB)\trss (MB)   \tswap (MB)")
+        self.print("version:\t\t%s" % VERSION)
+        self.print("time limit:\t\t%d seconds" % self.process.timelimit)
+        self.print("memory limit:\t%d MB" % self.process.memorylimit)
+        self.print("real time limit:\t%d seconds" % self.process.realtimelimit)
+        self.print("swap limit:\t\t%d MB" % self.process.swaplimit)
+        self.print("cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]))
+        self.print("nice:\t\t%d" % self.process.nice)
+        self.print("running:\t\tbash -c \"%s\"" % " ".join(self.process.args))
+        self.print("start:\t\t%s" % time.strftime("%c"))
+        self.print("columns:\t\treal (s)\tuser (s)\tsys (s)  \tmax memory (MB)\trss (MB)   \tswap (MB)")
 
     def end(self):
-        self.print("[pyrunlim] end:  \t\t%s" % time.strftime("%c"))
-        self.print("[pyrunlim] status:\t\t%s" % self.process.status)
-        self.print("[pyrunlim] result:\t\t%s" % str(self.process.result))
+        self.print("end:  \t\t%s" % time.strftime("%c"))
+        self.print("status:\t\t%s" % self.process.status)
+        self.print("result:\t\t%s" % str(self.process.result))
         if self.process.redirectOutput or self.process.redirectError:
-            self.print("[pyrunlim] output:\t\t%s" % str(self.process.redirectOutput))
-            self.print("[pyrunlim] error:\t\t%s" % str(self.process.redirectError))
+            self.print("output:\t\t%s" % str(self.process.redirectOutput))
+            self.print("error:\t\t%s" % str(self.process.redirectError))
         else:
-            self.print("[pyrunlim] output+error:\t%s" % str(self.process.redirect))
-        self.print("[pyrunlim] children:\t\t%d" % len(self.process.subprocesses))
-        self.print("[pyrunlim] real:\t\t%.3f seconds" % self.process.real)
-        self.print("[pyrunlim] time:\t\t%.3f seconds" % (self.process.system + self.process.user))
-        self.print("[pyrunlim] user:\t\t%.3f seconds" % self.process.user)
-        self.print("[pyrunlim] system:\t\t%.3f seconds" % self.process.system)
-        self.print("[pyrunlim] memory:\t\t%.1f MB" % self.process.max_memory)
-        self.print("[pyrunlim] samples:\t\t%d" % self.process.samplings)
+            self.print("output+error:\t%s" % str(self.process.redirect))
+        self.print("children:\t\t%d" % len(self.process.subprocesses))
+        self.print("real:\t\t%.3f seconds" % self.process.real)
+        self.print("time:\t\t%.3f seconds" % (self.process.system + self.process.user))
+        self.print("user:\t\t%.3f seconds" % self.process.user)
+        self.print("system:\t\t%.3f seconds" % self.process.system)
+        self.print("memory:\t\t%.1f MB" % self.process.max_memory)
+        self.print("samples:\t\t%d" % self.process.samplings)
 
 class XmlOutput:
     def __init__(self, process):
