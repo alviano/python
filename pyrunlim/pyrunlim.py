@@ -209,7 +209,7 @@ class Process(threading.Thread):
         self.numberOfReports = 0
         self.status = "interrupted"
         self.result = None
-        self.exit_code = -1
+        self.exit_code = None
         
         self.real = 0
         self.user = 0
@@ -236,7 +236,7 @@ class Process(threading.Thread):
         self.process.set_cpu_affinity(self.affinity)
         self.result = self.process.wait()
         self.done = True
-        if self.exit_code == -1:
+        if self.exit_code == None:
             self.status = "complete"
             self.exit_code = 0
         
@@ -303,21 +303,21 @@ class Process(threading.Thread):
     
     def checkLimit(self):
         if self.real > self.realtimelimit:
-            self.kill()
             self.status = "out of time (real)"
             self.exit_code = 1
-        elif self.user + self.system > self.timelimit:
             self.kill()
+        elif self.user + self.system > self.timelimit:
             self.status = "out of time"
             self.exit_code = 2
-        elif self.max_memory > self.memorylimit:
             self.kill()
+        elif self.max_memory > self.memorylimit:
             self.status = "out of memory"
             self.exit_code = 3
-        elif self.swap > self.swaplimit:
             self.kill()
+        elif self.swap > self.swaplimit:
             self.status = "out of memory (swap)"
             self.exit_code = 4
+            self.kill()
             
     def end(self):
         self.output.end()
