@@ -37,11 +37,14 @@ def parseArguments(runner):
     global GPL
     parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2014  Mario Alviano (mario@alviano.net)")
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
+    parser.add_argument('-r', '--run', metavar='<filename>', type=str, required=True, help='python code defining benchmarks and commands')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
     parser.add_argument('-f', '--fix-xml', metavar='<filename>', type=str, help="fix unclosed tags in xml file (and exit)")
     args = parser.parse_args()
     
+    if args.run != None:
+        runner.runfile = args.run
     if args.log != None:
         runner.log = open(args.log, 'w')
     if args.output != None:
@@ -98,13 +101,17 @@ class Runner:
     def __init__(self, pyrunlim=[]):
         global dirname
         self.beginTime = time.time()
-        self.pyrunlim = [s.replace("$DIRNAME", dirname) for s in pyrunlim]
+        self.setPyrunlim(pyrunlim)
+        self.runfile = ""
         self.commands = {}
         self.commandsOrder = []
         self.benchmarks = {}
         self.benchmarksOrder = []
         self.log = sys.stderr
         self.output = XmlOutput(self)
+        
+    def setPyrunlim(self, value):
+        self.pyrunlim = [s.replace("$DIRNAME", dirname) for s in value]
 
     def getFiles(self, directory, nameSchema="*"):
         files = subprocess.check_output(["find", directory, "-name", nameSchema])
@@ -128,6 +135,15 @@ class Runner:
         self.benchmarksOrder.append(benchmark)
         
     def run(self):
+        global dirname
+        if not os.path.exists(self.runfile):
+            sys.exit("File not found: %s" % (self.runfile,))
+        if os.path.isabs(self.runfile[0]):
+            dirname =  os.path.dirname(self.runfile)
+        else:
+            dirname = "%s/%s" % (os.getcwd(),  os.path.dirname(self.runfile))
+        exec(open(self.runfile).read())
+        
         self.output.begin()
         time_str = time.strftime(".%Y-%m-%d_%H:%M:%S", time.gmtime(self.beginTime))
         counter = 0
@@ -200,19 +216,7 @@ if __name__ == "__main__":
         Then, add commands to be tested and benchmarks to be run.
     """
 
-    dirname = os.path.dirname(__file__)
-    
-    runner = Runner([
-        "$DIRNAME/../pyrunlim/pyrunlim.py", 
-        "--time=%d" % 600, 
-        "--memory=%d" % (3 * 1024), 
-        "--affinity=0",
-        "--output=xml"
-    ])
+    runner = Runner()
     parseArguments(runner)
-    
-    runner.addCommand(Command("gringo+clasp", "gringo --shift $1 $2 | clasp"))
-    
-    runner.addBenchmark(Benchmark("StableMarriageASP", sharedOptions=["$DIRNAME/StableMarriage/encoding.lp"], testcases=sorted([(file,) for file in runner.executeAndSplit("ls $DIRNAME/StableMarriage/*.asp")]), validator=ExitCodeValidator([10, 20, 30])))
 
     runner.run()
