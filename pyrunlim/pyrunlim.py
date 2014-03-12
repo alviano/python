@@ -162,7 +162,7 @@ class XmlOutput:
         self.print(" system='%.3f'" % self.process.system)
         self.print(" memory='%.1f'" % self.process.max_memory)
         self.print(" samples='%d'" % self.process.samplings)
-        self.print("/>")
+        self.println("/>")
         self.println("</pyrunlim>")
 
 class Subprocess:

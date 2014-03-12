@@ -39,7 +39,7 @@ def parseArguments(runner):
     global GPL
     parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2014  Mario Alviano (mario@alviano.net)")
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
-    parser.add_argument('-r', '--run', metavar='<filename>', type=str, required=True, help='python code defining benchmarks and commands')
+    parser.add_argument('-r', '--run', metavar='<filename>', type=str, help='python code defining benchmarks and commands')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
     parser.add_argument('-d', '--output-directory', metavar='<output-directory>', type=str, default='.', help='directory for storing output files (default is .)')
@@ -59,6 +59,9 @@ def parseArguments(runner):
         runner.outputDirectory = args.output_directory
     if args.fix_xml != None:
         runner.fixXml(args.fix_xml)
+        
+    if args.args.output_directory == None:
+        print("pyrunner.py: error:  the following arguments are required: -r/--run (or use -f/--fix-xml)")
 
         
 class Command:
