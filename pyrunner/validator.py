@@ -1,4 +1,3 @@
-from dirname import *
 import fileinput
 from lxml import etree
 import re
