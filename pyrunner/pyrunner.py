@@ -60,7 +60,7 @@ def parseArguments(runner):
     if args.fix_xml != None:
         runner.fixXml(args.fix_xml)
         
-    if args.args.output_directory == None:
+    if args.output_directory == None:
         print("pyrunner.py: error:  the following arguments are required: -r/--run (or use -f/--fix-xml)")
 
         
