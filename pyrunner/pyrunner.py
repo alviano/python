@@ -216,13 +216,6 @@ class Runner:
         exit(0)
 
 if __name__ == "__main__":
-    """
-        This is an example main.
-        You should import this file and declare your own main function.
-        In a nutshell, creare a Runner instance pointing to pyrunlim.
-        Then, add commands to be tested and benchmarks to be run.
-    """
-
     runner = Runner()
     parseArguments(runner)
 
