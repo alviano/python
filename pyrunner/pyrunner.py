@@ -40,6 +40,7 @@ def parseArguments(runner):
     parser.add_argument('-r', '--run', metavar='<filename>', type=str, required=True, help='python code defining benchmarks and commands')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
+    parser.add_argument('-d', '--output-directory', metavar='<output-directory>', type=str, default='./', help='directory for storing output files (default is ./)')
     parser.add_argument('-f', '--fix-xml', metavar='<filename>', type=str, help="fix unclosed tags in xml file (and exit)")
     args = parser.parse_args()
     
@@ -52,6 +53,8 @@ def parseArguments(runner):
             runner.output = TextOutput(runner)
         elif args.output == 'xml':
             runner.output = XmlOutput(runner)
+    if args.output_directory != None:
+        runner.outputDirectory = args.output_directory
     if args.fix_xml != None:
         runner.fixXml(args.fix_xml)
 
@@ -109,6 +112,7 @@ class Runner:
         self.benchmarksOrder = []
         self.log = sys.stderr
         self.output = XmlOutput(self)
+        self.outputDirectory = '.'
         
     def setPyrunlim(self, value):
         self.pyrunlim = [s.replace("$DIRNAME", dirname) for s in value]
@@ -144,6 +148,9 @@ class Runner:
             dirname = "%s/%s" % (os.getcwd(),  os.path.dirname(self.runfile))
         exec(open(self.runfile).read())
         
+        if not os.path.exists(self.outputDirectory):
+            os.makedirs(self.outputDirectory)
+        
         self.output.begin()
         time_str = time.strftime(".%Y-%m-%d_%H:%M:%S", time.gmtime(self.beginTime))
         counter = 0
@@ -164,8 +171,8 @@ class Runner:
                     else:
                         args = list(self.pyrunlim)
                         counter = counter + 1
-                        args.append("--redirect-output=%s_%05d_OUT_%s" % (time_str, counter, command.id))
-                        args.append("--redirect-error=%s_%05d_ERR_%s" % (time_str, counter, command.id))
+                        args.append("--redirect-output=%s/%s_%05d_OUT_%s" % (self.outputDirectory, time_str, counter, command.id))
+                        args.append("--redirect-error=%s/%s_%05d_ERR_%s" % (self.outputDirectory, time_str, counter, command.id))
                         args.append(completeCommand)
                         proc = subprocess.Popen(args, stderr=subprocess.PIPE)
                         (out, err) = proc.communicate()
