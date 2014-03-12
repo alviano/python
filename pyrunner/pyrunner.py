@@ -32,6 +32,8 @@ import os
 from output import *
 from validator import *
 
+dirname = os.path.dirname(__file__)
+
 def parseArguments(runner):
     global VERSION
     global GPL
@@ -40,7 +42,7 @@ def parseArguments(runner):
     parser.add_argument('-r', '--run', metavar='<filename>', type=str, required=True, help='python code defining benchmarks and commands')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
-    parser.add_argument('-d', '--output-directory', metavar='<output-directory>', type=str, default='./', help='directory for storing output files (default is ./)')
+    parser.add_argument('-d', '--output-directory', metavar='<output-directory>', type=str, default='.', help='directory for storing output files (default is .)')
     parser.add_argument('-f', '--fix-xml', metavar='<filename>', type=str, help="fix unclosed tags in xml file (and exit)")
     args = parser.parse_args()
     
@@ -87,7 +89,12 @@ class Benchmark:
         self.runner = None
         self.id = id
         self.sharedOptions = [o.replace("$DIRNAME", dirname) for o in sharedOptions]
-        self.testcases = testcases
+        self.testcases = []
+        for testcase in testcases:
+            item = []
+            for i in range(0, len(testcase)):
+                item.append(testcase[i].replace("$DIRNAME", dirname))
+            self.testcases.append(tuple(item))
         self.validator = validator
         self.stopped = set() if stopAfterFirstFailure else None
             
@@ -138,7 +145,7 @@ class Runner:
         self.benchmarks[benchmark.id] = benchmark
         self.benchmarksOrder.append(benchmark)
         
-    def run(self):
+    def _replaceDirname(self):
         global dirname
         if not os.path.exists(self.runfile):
             sys.exit("File not found: %s" % (self.runfile,))
@@ -147,12 +154,18 @@ class Runner:
         else:
             dirname = "%s/%s" % (os.getcwd(),  os.path.dirname(self.runfile))
         exec(open(self.runfile).read())
+        for benchmark in self.benchmarks:
+            self.benchmarks[benchmark].validator.setDirname(dirname)
+        for command in self.commands:
+            self.commands[command].validator.setDirname(dirname)
         
+    def run(self):
         if not os.path.exists(self.outputDirectory):
             os.makedirs(self.outputDirectory)
-        
+
+        self._replaceDirname()
         self.output.begin()
-        time_str = time.strftime(".%Y-%m-%d_%H:%M:%S", time.gmtime(self.beginTime))
+        time_str = time.strftime(".%Y-%m-%d_%H-%M-%S", time.gmtime(self.beginTime))
         counter = 0
         for benchmark in self.benchmarksOrder:
             self.output.beginBenchmark(benchmark)
@@ -216,8 +229,6 @@ class Runner:
         exit(0)
 
 if __name__ == "__main__":
-    dirname = os.path.dirname(__file__)
-
     runner = Runner()
     parseArguments(runner)
 
