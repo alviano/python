@@ -6,7 +6,7 @@ self.setPyrunlim([
     "--output=xml"
 ])
 
-self.addCommand(Command("gringo+clasp", "gringo --shift $1 $2 | clasp"))
+self.addCommand(Command("gringo+clasp", "gringo --shift $1 $2 | clasp", validator=ExitCodeValidator([10, 20, 30])))
 
-self.addBenchmark(Benchmark("StableMarriageASP", sharedOptions=["$DIRNAME/StableMarriage/encoding.lp"], testcases=sorted([(file,) for file in self.executeAndSplit("ls $DIRNAME/StableMarriage/*.asp")]), validator=ExitCodeValidator([10, 20, 30])))
+self.addBenchmark(Benchmark("StableMarriageASP", sharedOptions=["$DIRNAME/StableMarriage/encoding.lp"], testcases=sorted([(file,) for file in self.executeAndSplit("ls $DIRNAME/StableMarriage/*.asp")])))
 
