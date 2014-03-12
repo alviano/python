@@ -8,5 +8,5 @@ self.setPyrunlim([
 
 self.addCommand(Command("gringo+clasp", "gringo --shift $1 $2 | clasp"))
 
-self.addBenchmark(Benchmark("StableMarriageASP", sharedOptions=["$DIRNAME/StableMarriage/encoding.lp"], testcases=sorted([(file,) for file in runner.executeAndSplit("ls $DIRNAME/StableMarriage/*.asp")]), validator=ExitCodeValidator([10, 20, 30])))
+self.addBenchmark(Benchmark("StableMarriageASP", sharedOptions=["$DIRNAME/StableMarriage/encoding.lp"], testcases=sorted([(file,) for file in self.executeAndSplit("ls $DIRNAME/StableMarriage/*.asp")]), validator=ExitCodeValidator([10, 20, 30])))
 

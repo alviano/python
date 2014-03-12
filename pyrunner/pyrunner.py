@@ -216,6 +216,8 @@ class Runner:
         exit(0)
 
 if __name__ == "__main__":
+    dirname = os.path.dirname(__file__)
+
     runner = Runner()
     parseArguments(runner)
 
