@@ -330,8 +330,17 @@ if __name__ == "__main__":
     
     process.start()
 
+    count = 0
     while not process.done:
-        time.sleep(0.1)
+        count = count + 1
+        if count < 10:
+            time.sleep(.1)
+        elif count < 30:
+            time.sleep(.2)
+        elif count < 60:
+            time.sleep(.5)
+        else:
+            time.sleep(1)
         process.sampler()
         
     process.end()
