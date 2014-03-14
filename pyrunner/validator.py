@@ -18,7 +18,7 @@ class ExitCodeValidator:
         self.validExitCodes = validExitCodes
         
     def valid(self, command, benchmark, testcase, xml):
-        return xml.xpath("//stats/@status = 'complete'") and int(xml.xpath("//stats/@result")[0]) in self.validExitCodes
+        return int(xml.xpath("//stats/@result")[0]) in self.validExitCodes
 
     def setDirname(self, dirname):
         pass

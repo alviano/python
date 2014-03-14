@@ -50,6 +50,8 @@ class TextOutput:
         self.print("                validator: yes")
     def onInvalidRun(self):
         self.print("                validator: no")
+    def onIncompleteRun(self):
+        self.print("                validator: n/a")
         
 class XmlOutput:
     def __init__(self, runner):
@@ -93,4 +95,6 @@ class XmlOutput:
         self.print("<validator response='yes' />")
     def onInvalidRun(self):
         self.print("<validator response='no' />")
+    def onIncompleteRun(self):
+        self.print("<validator response='n/a' />")
 

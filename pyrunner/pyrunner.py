@@ -195,7 +195,11 @@ class Runner:
                         xml = etree.XML(err.decode())
 
                         self.output.report(xml)
-                        if command.validator.valid(command, benchmark, testcase, xml) and benchmark.validator.valid(command, benchmark, testcase, xml):
+                        if  xml.xpath("//stats/@status != 'complete'"):
+                            benchmark.onInvalidRun(testcase, command)
+                            command.onInvalidRun(benchmark, testcase)
+                            self.output.onIncompleteRun()
+                        elif command.validator.valid(command, benchmark, testcase, xml) and benchmark.validator.valid(command, benchmark, testcase, xml):
                             benchmark.onValidRun(testcase, command)
                             command.onValidRun(benchmark, testcase)
                             self.output.onValidRun()
