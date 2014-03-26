@@ -65,7 +65,7 @@ def parseArguments(runner):
 
         
 class Command:
-    def __init__(self, id, command, dependencies=set(), validator=ExitCodeValidator()):
+    def __init__(self, id, command, dependencies=set(), validator=AllValidator()):
         global dirname
         
         self.runner = None
