@@ -245,41 +245,34 @@ class Process(threading.Thread):
             subprocesses = self.process.get_children(recursive=True)
         except psutil.NoSuchProcess:
             subprocesses = []
-        
+        subprocesses = [p for p in subprocesses if p.cmdline != self.process.cmdline]
+
         for p in subprocesses:
             try:
                 p.terminate()
             except psutil.NoSuchProcess:
                 pass
             
-        try:
-            self.process.terminate()
-        except psutil.NoSuchProcess:
-            pass
-
         elapsed = 0.0
         while True:
             time.sleep(0.1)
             elapsed = elapsed + 0.1
 
-            running = self.process.is_running()
+            running = False
             for p in subprocesses:
                 if p.is_running():
                     running = True
-            if not running or elapsed >= 1.0:
+            if not running:
+                break
+            if elapsed >= 1.0:
+                for p in subprocesses:
+                    try:
+                        p.kill()
+                    except psutil.NoSuchProcess:
+                        pass
                 break
 
-        for p in subprocesses:
-            try:
-                p.kill()
-            except psutil.NoSuchProcess:
-                pass
             
-        try:
-            self.process.kill()
-        except psutil.NoSuchProcess:
-            pass
-
     def sampler(self):
         if self.done:
             return
