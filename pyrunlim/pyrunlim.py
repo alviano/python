@@ -248,6 +248,29 @@ class Process(threading.Thread):
         
         for p in subprocesses:
             try:
+                p.terminate()
+            except psutil.NoSuchProcess:
+                pass
+            
+        try:
+            self.process.terminate()
+        except psutil.NoSuchProcess:
+            pass
+
+        elapsed = 0.0
+        while True:
+            time.sleep(0.1)
+            elapsed = elapsed + 0.1
+
+            running = self.process.is_running()
+            for p in subprocesses:
+                if p.is_running():
+                    running = True
+            if not running or elapsed >= 1.0:
+                break
+
+        for p in subprocesses:
+            try:
                 p.kill()
             except psutil.NoSuchProcess:
                 pass
