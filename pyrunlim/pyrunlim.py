@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 import argparse
 import psutil
@@ -291,7 +291,7 @@ class Process(threading.Thread):
                     
             try:
                 self.subprocesses[p.pid].update(p.get_cpu_times(), p.get_memory_info(), p.get_memory_maps())
-            except psutil.NoSuchProcess:
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
             
             self.rss = self.rss + self.subprocesses[p.pid].rss
