@@ -59,9 +59,14 @@ class Target:
         if key not in self.parameters:
             self.parameters[key] = []
         self.parameters[key].append(pdb_parameter[3])
+        
+    def addRequisite(self, pdb_requires):
+        self.requisites.append(".pydecbench.%s.output" % self.targetId(pdb_requires[3:]))
     
-    def targetId(self):
-        return "\"%s.pydecbench.output\"" % str(self.id)
+    def targetId(self, id=None):
+        if id is None:
+            id = self.id
+        return str(id).replace("(","_").replace(")","_").replace(" ","_").replace("'","_").replace('"',"_").replace(",","_").replace("/","_").replace(".","_")
         
     def command(self):
         ret = []
@@ -70,12 +75,15 @@ class Target:
         return " ".join(ret)
     
     def print(self):
-        print("%s:" % self.targetId())
-        print("\tpyrunlim.py %s %s %s" % (
+        id = self.targetId()
+        print(".pydecbench.%s.output: %s" %  (id, " ".join(self.requisites)))
+        print("\tpyrunlim.py --output xml %s %s %s \"%s\"" % (
             "" if "memory" not in self.limits else "--memory %d" % self.limits["memory"],
             "" if "cpu" not in self.limits else "--time %d" % self.limits["cpu"],
+            "--log=.pydecbench.%s.log --redirect-output=.pydecbench.%s.stdout --redirect-error=.pydecbench.%s.stderr" % (id, id, id),
             self.command()
         ))
+        print()
     
 class DecBench:
     def __init__(self):
@@ -89,7 +97,7 @@ class DecBench:
             data = "%s%s\n" % (data, line)
         (out, err) = gringo.communicate(data.encode())
         out = out.decode().split('\n')
-        
+
         atoms = []
         count = 0
         for line in out:
@@ -136,16 +144,26 @@ class DecBench:
         for target in self.atoms["pdb_target"]:
             target = Target(target)
             targets[target.id] = target
-        for limit in self.atoms["pdb_limit"]:
-            if limit[3:] in targets:
-                target = targets[limit[3:]]
-                target.addLimit(limit)
-        for parameter in self.atoms["pdb_parameter"]:
-            if parameter[1:3] in targets:
-                target = targets[parameter[1:3]]
-                target.addParameter(parameter)
+        if "pdb_limit" in self.atoms:
+            for limit in self.atoms["pdb_limit"]:
+                if limit[3:] in targets:
+                    target = targets[limit[3:]]
+                    target.addLimit(limit)
+        if "pdb_parameter" in self.atoms:
+            for parameter in self.atoms["pdb_parameter"]:
+                if parameter[1:3] in targets:
+                    target = targets[parameter[1:3]]
+                    target.addParameter(parameter)
+        if "pdb_requires" in self.atoms:
+            for requires in self.atoms["pdb_requires"]:
+                if requires[1:3] in targets:
+                    target = targets[requires[1:3]]
+                    target.addRequisite(requires)
         
-        print("all: %s\n" % " ".join([targets[target].targetId() for target in targets.keys()]))
+        print("all: %s\n" % " ".join([".pydecbench.%s.output" % targets[target].targetId() for target in targets.keys()]))
+        #print(".SILENT: %s\n" % " ".join([".pydecbench.%s.output" % targets[target].targetId() for target in targets.keys()]))
+        print(".PHONY: all clean\n")
+        print("clean:\n\trm -f .pydecbench.*\n")
         
         for target in targets:
             targets[target].print()
@@ -191,16 +209,33 @@ class DecBench:
             pdb_data(I,K,V) :- data(I,K,V).
             pdb_data(I1,K,V) :- pdb_data(I,K,V), pdb_parentOf(I,I1), #count{V1 : data(I1,K,V1)} = 0.
 
+            parameter(S,G,V) :- pdb_run(S,G), parameter(solver(S),V).
+            parameter(S,G,V,P) :- pdb_run(S,G), parameter(solver(S),V,P).
             parameter(S,G,V) :- pdb_run(S,G), parameter(group(G),V).
             parameter(S,G,V,P) :- pdb_run(S,G), parameter(group(G),V,P).
-            pdb_parameter(S,G,V,0) :- solver(S,V), pdb_run(S,G).
-            pdb_parameter(S,G,V,999999) :- parameter(S,G,V).
-            pdb_parameter(S,G,V,P) :- parameter(S,G,V,priority(P)).
-            pdb_parameter(S,G,key_value(K,V),999999) :- parameter(S,G,K,V), V != priority(P), pdb_priority(P).  pdb_priority(P) :- parameter(S,G,V,priority(P)).
-            pdb_parameter(S,G,key_value(K,V),P) :- parameter(S,G,K,V,priority(P)).
-            pdb_parameter(S,G1,V,P) :- pdb_parameter(S,G,V,P), pdb_parentOf(G,G1). %, #count{V1 : parameter(S,G1,V1)} = 0, #count{V1 : parameter(S,G1,V1,_)} = 0, #count{V1 : parameter(S,G1,V1,_,_)} = 0.
+            pdb_parameter(S,G,V,0) :- solver(S,V), pdb_run(S,G), not pdb_pipe(V). pdb_pipe(pipe(A,B)) :- solver(_, pipe(A,B)). pdb_pipe(pipe(A,B,C)) :- solver(_, pipe(A,B,C)). pdb_pipe(pipe(A,B,C,D)) :- solver(_, pipe(A,B,C,D)). pdb_pipe(pipe(A,B,C,D,E)) :- solver(_, pipe(A,B,C,D,E)).
+            pdb_parameter(S,G,A,0) :- solver(S,pipe(A,B)), pdb_run(S,G). pdb_parameter(S,G,"|",999999) :- solver(S,pipe(A,B)), pdb_run(S,G). pdb_parameter(S,G,B,999999+1) :- solver(S,pipe(A,B)), pdb_run(S,G).
+            pdb_parameter(S,G,A,0) :- solver(S,pipe(A,B,C)), pdb_run(S,G). pdb_parameter(S,G,"|",999999) :- solver(S,pipe(A,B,C)), pdb_run(S,G). pdb_parameter(S,G,B,999999+1) :- solver(S,pipe(A,B,C)), pdb_run(S,G). pdb_parameter(S,G,"|",2*999999) :- solver(S,pipe(A,B,C)), pdb_run(S,G). pdb_parameter(S,G,C,2*999999+1) :- solver(S,pipe(A,B,C)), pdb_run(S,G).
+            %4
+            %5
+            pdb_parameter(S,G,V,999999-2) :- parameter(S,G,V), not pdb_pipe(S). pdb_pipe(pipe(S,N)) :- parameter(pipe(S,N),G,V).
+            pdb_parameter(S,G,V,(N+1)*999999-2) :- parameter(pipe(S,N),G,V).
+            pdb_parameter(S,G,V,P) :- parameter(S,G,V,priority(P)), not pdb_pipe(S). pdb_pipe(pipe(S,N)) :- parameter(pipe(S,N),G,V,P).
+            pdb_parameter(S,G,V,P+(N+1)*999999-2) :- parameter(pipe(S,N),G,V,priority(P)).
+            pdb_parameter(S,G,key_value(K,V),999999-2) :- parameter(S,G,K,V), not pdb_priority(V), not pdb_pipe(S).  pdb_priority(priority(P)) :- parameter(S,G,V,priority(P)).
+            pdb_parameter(S,G,key_value(K,V),(N+1)*999999-2) :- parameter(pipe(S,N),G,K,V), not pdb_priority(V).
+            pdb_parameter(S,G,key_value(K,V),P) :- parameter(S,G,K,V,priority(P)), not pdb_pipe(S). pdb_pipe(pipe(S,N)) :- parameter(pipe(S,N),G,K,V,P).
+            pdb_parameter(S,G,key_value(K,V),P+(N+1)*999999-2) :- parameter(pipe(S,N),G,K,V,priority(P)).
+            pdb_parameter(S,G1,V,P) :- pdb_parameter(S,G,V,P), pdb_parentOf(G,G1), not pdb_pipe(S).
+            pdb_parameter(S,G1,V,P+(N+1)*999999-2) :- pdb_parameter(pipe(S,N),G,V,P), pdb_parentOf(G,G1).
             
             pdb_target(S,G) :- pdb_run(S,G), testcase(G).
+            
+            pdb_requires(S1,G1,S2,G2) :- requires(S1,G1,S2,G2).
+            pdb_requires(S1,G,S2,G) :- requires(S1,S2), not pdb_solver(S1), not pdb_solver(S2), not pdb_group(S1), not pdb_group(S2), pdb_run(S1,G), pdb_run(S2,G). pdb_solver(solver(S)) :- requires(solver(S),_). pdb_solver(solver(S)) :- requires(_,solver(S)). pdb_group(group(G)) :- requires(group(G),_). pdb_group(group(G)) :- requires(_,group(G)).
+            pdb_requires(S1,G,S2,G) :- requires(solver(S1),solver(S2)), pdb_run(S1,G), pdb_run(S2,G).
+            pdb_requires(S,G1,S,G2) :- requires(group(G1),group(G2)), pdb_run(S,G1), pdb_run(S,G2).
+            
             
             #show pdb_target/2.
             #show pdb_limit/4.
