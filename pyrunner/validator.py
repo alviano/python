@@ -30,7 +30,7 @@ class AspCompetitionValidator:
     def valid(self, command, benchmark, testcase, xml):
         output_file = xml.xpath("//stats/@output")[0]
         try:
-            lines = subprocess.check_output(["bash", "-c", "(cat %s; tail --lines=1 %s) | %s" % (testcase[0], output_file, self.path)])
+            lines = subprocess.check_output(["bash", "-c", "(cat %s; tail --lines=1 %s) | sed 's/^\[[^]]*\] //' | %s" % (testcase[0], output_file, self.path)])
             return lines.decode().strip() == "OK"
         except:
             return False

@@ -82,9 +82,9 @@ def parseArguments(process):
         process.redirectError = args.redirect_error
     if args.no_timestamp:
         process.timestamp = False
-    for regex in args.regex:
-        process.regexes.append(re.compile(regex))
-    print(process.regexes)
+    if args.regex:
+        for regex in args.regex:
+            process.regexes.append(re.compile(regex))
     process.args.append(args.command)
     process.args.extend(args.args)
     
