@@ -18,11 +18,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "1.1"
+VERSION = "2.0"
 
 import argparse
 import psutil
 import os
+import subprocess
 import sys
 import time
 import threading
@@ -44,6 +45,7 @@ def parseArguments(process):
     parser.add_argument('-R', '--redirect', metavar='<filename>', type=str, help='redirect output (and error) of the command (default is STDOUT)')
     parser.add_argument('-O', '--redirect-output', metavar='<filename>', type=str, help='redirect output of the command (incompatible with -R,--redirect)')
     parser.add_argument('-E', '--redirect-error', metavar='<filename>', type=str, help='redirect error of the command (incompatible with -R,--redirect)')
+    parser.add_argument('--no-timestamp', action='store_true', help='do not timestamp output and error of the command')
     parser.add_argument('command', metavar="<command>", help="command to run (and limit)")
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="arguments for <command>, or escaped pipes, i.e., \|, followed by other commands and arguments")
     args = parser.parse_args()
@@ -70,11 +72,14 @@ def parseArguments(process):
         elif args.output == 'xml':
             process.output = XmlOutput(process)
     if args.redirect != None:
-        process.redirect = args.redirect
+        process.redirectOutput = args.redirect
+        process.redirectError = args.redirect
     if args.redirect_output != None:
         process.redirectOutput = args.redirect_output
     if args.redirect_error != None:
         process.redirectError = args.redirect_error
+    if args.no_timestamp:
+        process.timestamp = False
     process.args.append(args.command)
     process.args.extend(args.args)
     
@@ -106,11 +111,11 @@ class TextOutput:
         self.print("end:  \t\t%s" % time.strftime("%c"))
         self.print("status:\t\t%s" % self.process.status)
         self.print("result:\t\t%s" % str(self.process.result))
-        if self.process.redirectOutput or self.process.redirectError:
+        if self.process.redirectOutput != self.process.redirectError:
             self.print("output:\t\t%s" % str(self.process.redirectOutput))
             self.print("error:\t\t%s" % str(self.process.redirectError))
         else:
-            self.print("output+error:\t%s" % str(self.process.redirect))
+            self.print("output+error:\t%s" % str(self.process.redirectOutput))
         self.print("children:\t\t%d" % len(self.process.subprocesses))
         self.print("real:\t\t%.3f seconds" % self.process.real)
         self.print("time:\t\t%.3f seconds" % (self.process.system + self.process.user))
@@ -150,11 +155,11 @@ class XmlOutput:
         self.print(" end='%s'" % time.strftime("%c"))
         self.print(" status='%s'" % self.process.status)
         self.print(" result='%s'" % str(self.process.result))
-        if self.process.redirectOutput or self.process.redirectError:
+        if self.process.redirectOutput != self.process.redirectError:
             self.print(" output='%s'" % str(self.process.redirectOutput))
             self.print(" error='%s'" % str(self.process.redirectError))
         else:
-            self.print(" output-and-error='%s'" % str(self.process.redirect))
+            self.print(" output-and-error='%s'" % str(self.process.redirectOutput))
         self.print(" children='%d'" % len(self.process.subprocesses))
         self.print(" real='%.3f'" % self.process.real)
         self.print(" time='%.3f'" % (self.process.system + self.process.user))
@@ -184,6 +189,30 @@ class Subprocess:
         for m in memory_maps:
             self.swap = self.swap + m.swap
 
+class Reader(threading.Thread):
+    def __init__(self, begin, input):
+        threading.Thread.__init__(self)
+        self.begin = begin
+        self.input = input
+        self.lines = []
+        self.active = False
+
+    def run(self):
+        self.active = True
+        while self.active:
+            line = self.input.readline().decode()
+            if not line:
+                self.active = False
+            else:
+                self.lines.append((time.time() - self.begin, line if line[-1] != '\n' else line[:-1]))
+            
+    def stop(self):
+        self.active = False
+        
+    def getLines(self):
+        (res, self.lines) = (self.lines, [])
+        return res
+
 class Process(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -196,9 +225,13 @@ class Process(threading.Thread):
         self.memorylimit = 10**100
         self.swaplimit = 10**100
         self.log = sys.stderr
-        self.redirect = "/dev/stdout"
-        self.redirectOutput = None
-        self.redirectError = None
+        self.redirectOutput = "/dev/stdout"
+        self.redirectError = "/dev/stdout"
+        self.stdoutReader = None
+        self.stderrReader = None
+        self.stdoutFile = sys.stdout
+        self.stderrFile = sys.stdout
+        self.timestamp = True
         
         self.affinity = psutil.Process(os.getpid()).get_cpu_affinity()
         self.nice = 20
@@ -224,18 +257,34 @@ class Process(threading.Thread):
     def run(self):
         self.output.begin()
         self.begin = time.time()
-        if self.redirectOutput or self.redirectError:
-            if not self.redirectOutput:
-                self.redirectOutput = "/dev/null"
-            if not self.redirectError:
-                self.redirectError = "/dev/null"
-            self.process = psutil.Popen(["bash", "-c", "((%s) > %s 2> %s)" % (" ".join(self.args), self.redirectOutput, self.redirectError)])
-        else:
-            self.process = psutil.Popen(["bash", "-c", "((%s) &> %s)" % (" ".join(self.args), self.redirect)])
+        
+        if self.redirectOutput != "/dev/stdout":
+            self.stdoutFile = open(self.redirectOutput, "w")
+        if self.redirectError != "/dev/stdout":
+            if self.redirectError != self.redirectOutput:
+                self.stderrFile = open(self.redirectError, "w")
+            else:
+                self.stderrFile = self.stdoutFile
+
+        self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.stdoutReader = Reader(self.begin, self.process.stdout)
+        self.stderrReader = Reader(self.begin, self.process.stderr)
+        self.stdoutReader.run()
+        self.stderrReader.run()
+        
         self.process.set_nice(self.nice)
         self.process.set_cpu_affinity(self.affinity)
         self.result = self.process.wait()
+
         self.done = True
+        self.stdoutReader.stop()
+        self.stderrReader.stop()
+        self.processStreams()
+        if self.redirectOutput != "/dev/stdout":
+            self.stdoutFile.close()
+        if self.redirectError != "/dev/stdout" and self.redirectError != self.redirectOutput:
+            self.stderrFile.close()
+        
         if self.exit_code == None:
             self.status = "complete"
             self.exit_code = 0
@@ -271,12 +320,44 @@ class Process(threading.Thread):
                     except psutil.NoSuchProcess:
                         pass
                 break
-
-            
+    
+    def processStreams(self):
+        def pretty_print(timestamp, prefix, time, line, file):
+            if timestamp:
+                print("[%s%10.3f] %s" % (prefix, time, line), file=file)
+            else:
+                print(line, file=file)
+        
+        stdout = self.stdoutReader.getLines()
+        stderr = self.stderrReader.getLines()
+        if self.redirectOutput != self.redirectError:
+            for line in stdout:
+                pretty_print(self.timestamp, "o", line[0], line[1], self.stdoutFile)
+            for line in stderr:
+                pretty_print(self.timestamp, "e", line[0], line[1], self.stderrFile)
+        else:
+            i = 0
+            j = 0
+            while i < len(stdout) and j < len(stderr):
+                if stdout[i][0] < stderr[j][0]:
+                    pretty_print(self.timestamp, "o", stdout[i][0], stdout[i][1], self.stdoutFile)
+                    i = i + 1
+                else:
+                    pretty_print(self.timestamp, "e", stderr[j][0], stderr[j][1], self.stderrFile)
+                    j = i + 1
+            while i < len(stdout):
+                pretty_print(self.timestamp, "o", stdout[i][0], stdout[i][1], self.stdoutFile)
+                i = i + 1
+            while j < len(stderr):
+                pretty_print(self.timestamp, "e", stderr[j][0], stderr[j][1], self.stderrFile)
+                j = i + 1
+        
     def sampler(self):
         if self.done:
             return
 
+        self.processStreams()
+        
         subprocesses = [self.process]
         try:
             subprocesses.extend(self.process.get_children(recursive=True))
