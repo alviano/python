@@ -23,6 +23,7 @@ VERSION = "2.0"
 import argparse
 import psutil
 import os
+import re
 import subprocess
 import sys
 import time
@@ -46,6 +47,7 @@ def parseArguments(process):
     parser.add_argument('-O', '--redirect-output', metavar='<filename>', type=str, help='redirect output of the command (incompatible with -R,--redirect)')
     parser.add_argument('-E', '--redirect-error', metavar='<filename>', type=str, help='redirect error of the command (incompatible with -R,--redirect)')
     parser.add_argument('--no-timestamp', action='store_true', help='do not timestamp output and error of the command')
+    parser.add_argument('--regex', metavar='<regex>', type=str, action='append', help='extract data from output and error of the command according to the "named groups" in <regex> (this option can be used several times)')
     parser.add_argument('command', metavar="<command>", help="command to run (and limit)")
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="arguments for <command>, or escaped pipes, i.e., \|, followed by other commands and arguments")
     args = parser.parse_args()
@@ -80,6 +82,9 @@ def parseArguments(process):
         process.redirectError = args.redirect_error
     if args.no_timestamp:
         process.timestamp = False
+    for regex in args.regex:
+        process.regexes.append(re.compile(regex))
+    print(process.regexes)
     process.args.append(args.command)
     process.args.extend(args.args)
     
@@ -94,6 +99,11 @@ class TextOutput:
         
     def report(self):
         self.print("sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
+    
+    def reportExtract(self, time, dict):
+        print("[r%10.3f] " % time, end="", file=self.process.log)
+        print("\t".join(["%s=%s" % (key, dict[key]) for key in dict.keys()]), file=self.process.log)
+
     
     def begin(self):
         self.print("version:\t\t%s" % VERSION)
@@ -138,6 +148,12 @@ class XmlOutput:
     def report(self):
         self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
+    def reportExtract(self, time, dict):
+        self.print("<regex real='%.3f'>" % time)
+        for key in dict.keys():
+            self.print("<%s>%s</%s>" % (key, dict[key], key))
+        self.println("</regex>")
+
     def begin(self):
         self.print("<pyrunlim version='%s'" % VERSION)
         self.print(" time-limit='%d'" % self.process.timelimit)
@@ -232,6 +248,7 @@ class Process(threading.Thread):
         self.stdoutFile = sys.stdout
         self.stderrFile = sys.stdout
         self.timestamp = True
+        self.regexes = []
         
         self.affinity = psutil.Process(os.getpid()).get_cpu_affinity()
         self.nice = 20
@@ -321,35 +338,40 @@ class Process(threading.Thread):
                         pass
                 break
     
-    def processStreams(self):
-        def pretty_print(timestamp, prefix, time, line, file):
-            if timestamp:
-                print("[%s%10.3f] %s" % (prefix, time, line), file=file)
-            else:
-                print(line, file=file)
+    def pretty_print(self, prefix, time, line, file):
+        if self.timestamp:
+            print("[%s%10.3f] %s" % (prefix, time, line), file=file)
+        else:
+            print(line, file=file)
         
+        for regex in self.regexes:
+            match = regex.match(line)
+            if match:
+                self.output.reportExtract(time, match.groupdict())
+
+    def processStreams(self):
         stdout = self.stdoutReader.getLines()
         stderr = self.stderrReader.getLines()
         if self.redirectOutput != self.redirectError:
             for line in stdout:
-                pretty_print(self.timestamp, "o", line[0], line[1], self.stdoutFile)
+                self.pretty_print("o", line[0], line[1], self.stdoutFile)
             for line in stderr:
-                pretty_print(self.timestamp, "e", line[0], line[1], self.stderrFile)
+                self.pretty_print("e", line[0], line[1], self.stderrFile)
         else:
             i = 0
             j = 0
             while i < len(stdout) and j < len(stderr):
                 if stdout[i][0] < stderr[j][0]:
-                    pretty_print(self.timestamp, "o", stdout[i][0], stdout[i][1], self.stdoutFile)
+                    self.pretty_print("o", stdout[i][0], stdout[i][1], self.stdoutFile)
                     i = i + 1
                 else:
-                    pretty_print(self.timestamp, "e", stderr[j][0], stderr[j][1], self.stderrFile)
+                    self.pretty_print("e", stderr[j][0], stderr[j][1], self.stderrFile)
                     j = i + 1
             while i < len(stdout):
-                pretty_print(self.timestamp, "o", stdout[i][0], stdout[i][1], self.stdoutFile)
+                self.pretty_print("o", stdout[i][0], stdout[i][1], self.stdoutFile)
                 i = i + 1
             while j < len(stderr):
-                pretty_print(self.timestamp, "e", stderr[j][0], stderr[j][1], self.stderrFile)
+                self.pretty_print("e", stderr[j][0], stderr[j][1], self.stderrFile)
                 j = i + 1
         
     def sampler(self):
