@@ -16,5 +16,11 @@ def userFunction(pydecbench):
         parameter(group(G),F) :- data(G,filename,F).
         
         requires(dlv, clasp).
+        
+        solver(yes, "yes").
+        limit(cpu, 1, yes, "Stable marriage").
+        run(yes, "Stable marriage").
+        
+        validator(group(G),limit).
     """)
 

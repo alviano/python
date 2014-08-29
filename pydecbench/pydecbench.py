@@ -47,6 +47,7 @@ class Target:
     def __init__(self, pdb_target):
         self.id = pdb_target[1:]
         self.requisites = []
+        self.predecessors = []
         self.limits = {}
         self.parameters = {}
     
@@ -61,7 +62,10 @@ class Target:
         self.parameters[key].append(pdb_parameter[3])
         
     def addRequisite(self, pdb_requires):
-        self.requisites.append(".pydecbench.%s.output" % self.targetId(pdb_requires[3:]))
+        self.requisites.append(self.targetId(pdb_requires[3:]))
+    
+    def addPredecessor(self, pdb_follows):
+        self.predecessors.append(self.targetId(pdb_follows[3:]))
     
     def targetId(self, id=None):
         if id is None:
@@ -76,14 +80,20 @@ class Target:
     
     def print(self):
         id = self.targetId()
-        print(".pydecbench.%s.output: %s" %  (id, " ".join(self.requisites)))
-        print("\tpyrunlim.py --output xml %s %s %s \"%s\"" % (
+        print(".pydecbench.%s.log: %s %s" %  (id, " ".join([".pydecbench.%s.log" % r for r in self.requisites]), " ".join([".pydecbench.%s.log" % p for p in self.predecessors])))
+        print("\t-", end="")
+        if self.requisites:
+            print("\tif %s; then \\" % " && ".join(["[ -f .pydecbench.%s.log ]" % r for r in self.requisites]))
+        print("\tpyrunlim.py --output xml %s %s %s \"%s\" ;\\" % (
             "" if "memory" not in self.limits else "--memory %d" % self.limits["memory"],
             "" if "cpu" not in self.limits else "--time %d" % self.limits["cpu"],
-            "--log=.pydecbench.%s.log --redirect-output=.pydecbench.%s.stdout --redirect-error=.pydecbench.%s.stderr" % (id, id, id),
-            self.command()
+            "--log=.pydecbench.%s.logtmp --redirect-output=.pydecbench.%s.stdout --redirect-error=.pydecbench.%s.stderr" % (id, id, id),
+            self.command(),
         ))
-        print()
+        print("\tmv .pydecbench.%s.logtmp .pydecbench.%s.log" % (id, id), end="")
+        if self.requisites:
+            print(";\\\n\telse echo \"Skip\";\\\n\tfi", end="") 
+        print("\n")
     
 class DecBench:
     def __init__(self):
@@ -159,8 +169,13 @@ class DecBench:
                 if requires[1:3] in targets:
                     target = targets[requires[1:3]]
                     target.addRequisite(requires)
+        if "pdb_follows" in self.atoms:
+            for follows in self.atoms["pdb_follows"]:
+                if follows[1:3] in targets:
+                    target = targets[follows[1:3]]
+                    target.addPredecessor(requires)
         
-        print("all: %s\n" % " ".join([".pydecbench.%s.output" % targets[target].targetId() for target in targets.keys()]))
+        print("all: %s\n" % " ".join([".pydecbench.%s.log" % targets[target].targetId() for target in targets.keys()]))
         #print(".SILENT: %s\n" % " ".join([".pydecbench.%s.output" % targets[target].targetId() for target in targets.keys()]))
         print(".PHONY: all clean\n")
         print("clean:\n\trm -f .pydecbench.*\n")
@@ -235,12 +250,20 @@ class DecBench:
             pdb_requires(S1,G,S2,G) :- requires(S1,S2), not pdb_solver(S1), not pdb_solver(S2), not pdb_group(S1), not pdb_group(S2), pdb_run(S1,G), pdb_run(S2,G). pdb_solver(solver(S)) :- requires(solver(S),_). pdb_solver(solver(S)) :- requires(_,solver(S)). pdb_group(group(G)) :- requires(group(G),_). pdb_group(group(G)) :- requires(_,group(G)).
             pdb_requires(S1,G,S2,G) :- requires(solver(S1),solver(S2)), pdb_run(S1,G), pdb_run(S2,G).
             pdb_requires(S,G1,S,G2) :- requires(group(G1),group(G2)), pdb_run(S,G1), pdb_run(S,G2).
+
+            pdb_follows(S1,G1,S2,G2) :- follows(S1,G1,S2,G2).
+            pdb_follows(S1,G,S2,G) :- follows(S1,S2), not pdb_solver(S1), not pdb_solver(S2), not pdb_group(S1), not pdb_group(S2), pdb_run(S1,G), pdb_run(S2,G). pdb_solver(solver(S)) :- follows(solver(S),_). pdb_solver(solver(S)) :- follows(_,solver(S)). pdb_group(group(G)) :- follows(group(G),_). pdb_group(group(G)) :- follows(_,group(G)).
+            pdb_follows(S1,G,S2,G) :- follows(solver(S1),solver(S2)), pdb_run(S1,G), pdb_run(S2,G).
+            pdb_follows(S,G1,S,G2) :- follows(group(G1),group(G2)), pdb_run(S,G1), pdb_run(S,G2).
             
+            pdb_validator(S,G,V,nil) :- validator(group(G),V), pdb_run(S,G).
             
             #show pdb_target/2.
             #show pdb_limit/4.
             #show pdb_parameter/4.
             #show pdb_requires/4.
+            #show pdb_follows/4.
+            #show pdb_validator/4.
         """)
 
 if __name__ == "__main__":
