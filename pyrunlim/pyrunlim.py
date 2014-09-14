@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.1"
+VERSION = "2.2"
 
 import argparse
 import psutil
@@ -206,21 +206,16 @@ class Reader(threading.Thread):
         self.process = process
         self.input = input
         self.lines = []
-        self.active = False
 
     def run(self):
-        self.active = True
-        while self.active:
+        while True:
             line = self.input.readline().decode()
             if not line:
-                self.active = False
+                break
             else:
                 real = time.time() - self.process.begin
                 self.lines.append((real, line if line[-1] != '\n' else line[:-1], (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap)))
             
-    def stop(self):
-        self.active = False
-        
     def getLines(self):
         (res, self.lines) = (self.lines, [])
         return res
@@ -287,22 +282,14 @@ class Process(threading.Thread):
         self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.stdoutReader = Reader(self, self.process.stdout)
         self.stderrReader = Reader(self, self.process.stderr)
-        self.stdoutReader.run()
-        self.stderrReader.run()
+        self.stdoutReader.start()
+        self.stderrReader.start()
         
         self.process.set_nice(self.nice)
         self.process.set_cpu_affinity(self.affinity)
         self.result = self.process.wait()
-
         self.done = True
-        self.stdoutReader.stop()
-        self.stderrReader.stop()
-        self.processStreams()
-        if self.redirectOutput != "/dev/stdout" and self.redirectOutput != "/dev/stderr":
-            self.stdoutFile.close()
-        if self.redirectError != "/dev/stdout" and self.redirectError != "/dev/stderr" and self.redirectError != self.redirectOutput:
-            self.stderrFile.close()
-        
+
         if self.exit_code == None:
             self.status = "complete"
             self.exit_code = 0
@@ -442,8 +429,17 @@ class Process(threading.Thread):
             self.kill()
             
     def end(self):
+        self.stdoutReader.join()
+        self.stderrReader.join()
+        self.processStreams()
+        
         self.output.end()
-        if self.log != sys.stderr:
+
+        if self.stdoutFile != sys.stdout and self.stdoutFile != sys.stderr:
+            self.stdoutFile.close()
+        if self.stderrFile != sys.stdout and self.stderrFile != sys.stderr and self.redirectError != self.redirectOutput:
+            self.stderrFile.close()
+        if self.log != sys.stdout and self.log != sys.stderr:
             self.log.close()
             
 if __name__ == "__main__":
@@ -464,7 +460,8 @@ if __name__ == "__main__":
         else:
             time.sleep(1)
         process.sampler()
-        
+    
+    process.join()
     process.end()
     
     sys.exit(process.exit_code)
