@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.4
+#!/usr/bin/env python3
 
 GPL = """
 Run a command reporting statistics and possibly limiting usage of resources.
