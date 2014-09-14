@@ -89,23 +89,55 @@ def parseArguments(process):
     process.args.extend(args.args)
     
 
-class TextOutput:
+class OutputBuilder:
     def __init__(self, process):
         self.process = process
+        self.lock = threading.Lock()
+        
+    def report(self):
+        self.lock.acquire()
+        self._report()
+        self.lock.release()
+    
+    def reportStream(self, prefix, real, line, resources, file):
+        self.lock.acquire()
+        if self.process.timestamp:
+            print("[%s%10.3f] %s" % (prefix, real, line), file=file)
+        else:
+            print(line, file=file)
+        
+        for regex in self.process.regexes:
+            match = regex.match(line)
+            if match:
+                self._reportExtract(real, resources, match.groupdict())
+        self.lock.release()
+    
+    def begin(self):
+        self.lock.acquire()
+        self._begin()
+        self.lock.release()
+
+    def end(self):
+        self.lock.acquire()
+        self._end()
+        self.lock.release()
+
+class TextOutput(OutputBuilder):
+    def __init__(self, process):
+        OutputBuilder.__init__(self, process)
         
     def print(self, msg):
         print("[pyrunlim] %s" % msg, file=self.process.log)
         self.process.log.flush()
         
-    def report(self):
+    def _report(self):
         self.print("sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
-    def reportExtract(self, real, resources, dict):
+    def _reportExtract(self, real, resources, dict):
         print("[r%10.3f] " % real, end="", file=self.process.log)
         print("\t".join(["%s=%s" % (key, dict[key]) for key in dict.keys()]), file=self.process.log)
 
-    
-    def begin(self):
+    def _begin(self):
         self.print("version:\t\t%s" % VERSION)
         self.print("time limit:\t\t%d seconds" % self.process.timelimit)
         self.print("memory limit:\t%d MB" % self.process.memorylimit)
@@ -117,7 +149,7 @@ class TextOutput:
         self.print("start:\t\t%s" % time.strftime("%c"))
         self.print("columns:\t\treal (s)\tuser (s)\tsys (s)  \tmax memory (MB)\trss (MB)   \tswap (MB)")
 
-    def end(self):
+    def _end(self):
         self.print("end:  \t\t%s" % time.strftime("%c"))
         self.print("status:\t\t%s" % self.process.status)
         self.print("result:\t\t%s" % str(self.process.result))
@@ -131,9 +163,9 @@ class TextOutput:
         self.print("memory:\t\t%.1f MB" % self.process.max_memory)
         self.print("samples:\t\t%d" % self.process.samplings)
 
-class XmlOutput:
+class XmlOutput(OutputBuilder):
     def __init__(self, process):
-        self.process = process
+        OutputBuilder.__init__(self, process)
         
     def print(self, msg):
         print(msg, file=self.process.log, end="")
@@ -142,17 +174,17 @@ class XmlOutput:
         print(msg, file=self.process.log)
         self.process.log.flush()
 
-    def report(self):
+    def _report(self):
         self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
-    def reportExtract(self, real, resources, dict):
+    def _reportExtract(self, real, resources, dict):
         self.print("<regex real='%.3f'>" % real)
         self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
         for key in dict.keys():
             self.print("<group name='%s'>%s</group>" % (key, dict[key]))
         self.println("</regex>")
 
-    def begin(self):
+    def _begin(self):
         self.print("<pyrunlim version='%s'" % VERSION)
         self.print(" time-limit='%d'" % self.process.timelimit)
         self.print(" memory-limit='%d'" % self.process.memorylimit)
@@ -164,7 +196,7 @@ class XmlOutput:
         self.print(" start='%s'" % time.strftime("%c"))
         self.println(">")
 
-    def end(self):
+    def _end(self):
         self.print("<stats ")
         self.print(" end='%s'" % time.strftime("%c"))
         self.print(" status='%s'" % self.process.status)
@@ -195,17 +227,18 @@ class Subprocess:
         if times.system > self.system:
             self.system = times.system
         
-        self.rss = memory_info  .rss
+        self.rss = memory_info.rss
         self.swap = 0
         for m in memory_maps:
             self.swap = self.swap + m.swap
 
 class Reader(threading.Thread):
-    def __init__(self, process, input):
+    def __init__(self, process, input, prefix, outfile):
         threading.Thread.__init__(self)
         self.process = process
         self.input = input
-        self.lines = []
+        self.prefix = prefix
+        self.outfile = outfile
 
     def run(self):
         while True:
@@ -214,12 +247,8 @@ class Reader(threading.Thread):
                 break
             else:
                 real = time.time() - self.process.begin
-                self.lines.append((real, line if line[-1] != '\n' else line[:-1], (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap)))
+                self.process.output.reportStream(self.prefix, real, line if line[-1] != '\n' else line[:-1], (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap), self.outfile)
             
-    def getLines(self):
-        (res, self.lines) = (self.lines, [])
-        return res
-
 class Process(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -280,8 +309,8 @@ class Process(threading.Thread):
                 self.stderrFile = self.stdoutFile
 
         self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.stdoutReader = Reader(self, self.process.stdout)
-        self.stderrReader = Reader(self, self.process.stderr)
+        self.stdoutReader = Reader(self, self.process.stdout, "o", self.stdoutFile)
+        self.stderrReader = Reader(self, self.process.stderr, "e", self.stderrFile)
         self.stdoutReader.start()
         self.stderrReader.start()
         
@@ -326,42 +355,6 @@ class Process(threading.Thread):
                         pass
                 break
     
-    def pretty_print(self, prefix, real, line, resources, file):
-        if self.timestamp:
-            print("[%s%10.3f] %s" % (prefix, real, line), file=file)
-        else:
-            print(line, file=file)
-        
-        for regex in self.regexes:
-            match = regex.match(line)
-            if match:
-                self.output.reportExtract(real, resources, match.groupdict())
-
-    def processStreams(self):
-        stdout = self.stdoutReader.getLines()
-        stderr = self.stderrReader.getLines()
-        if self.redirectOutput != self.redirectError:
-            for line in stdout:
-                self.pretty_print("o", line[0], line[1], line[2], self.stdoutFile)
-            for line in stderr:
-                self.pretty_print("e", line[0], line[1], line[2], self.stderrFile)
-        else:
-            i = 0
-            j = 0
-            while i < len(stdout) and j < len(stderr):
-                if stdout[i][0] < stderr[j][0]:
-                    self.pretty_print("o", stdout[i][0], stdout[i][1], stdout[i][2], self.stdoutFile)
-                    i = i + 1
-                else:
-                    self.pretty_print("e", stderr[j][0], stderr[j][1], stderr[j][2], self.stderrFile)
-                    j = j + 1
-            while i < len(stdout):
-                self.pretty_print("o", stdout[i][0], stdout[i][1], stdout[i][2], self.stdoutFile)
-                i = i + 1
-            while j < len(stderr):
-                self.pretty_print("e", stderr[j][0], stderr[j][1], stderr[j][2], self.stderrFile)
-                j = j + 1
-        
     def updateResourceUsage(self):
         subprocesses = [self.process]
         try:
@@ -400,7 +393,7 @@ class Process(threading.Thread):
         if self.done:
             return
 
-        self.processStreams()
+        #self.processStreams()
         self.updateResourceUsage()
         
         self.samplings = self.samplings + 1
@@ -431,7 +424,7 @@ class Process(threading.Thread):
     def end(self):
         self.stdoutReader.join()
         self.stderrReader.join()
-        self.processStreams()
+        #self.processStreams()
         
         self.output.end()
 
