@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.0"
+VERSION = "2.1"
 
 import argparse
 import psutil
@@ -47,7 +47,7 @@ def parseArguments(process):
     parser.add_argument('-O', '--redirect-output', metavar='<filename>', type=str, help='redirect output of the command (incompatible with -R,--redirect)')
     parser.add_argument('-E', '--redirect-error', metavar='<filename>', type=str, help='redirect error of the command (incompatible with -R,--redirect)')
     parser.add_argument('--no-timestamp', action='store_true', help='do not timestamp output and error of the command')
-    parser.add_argument('--regex', metavar='<regex>', type=str, action='append', help='extract data from output and error of the command according to the "named groups" in <regex> (this option can be used several times)')
+    parser.add_argument('--regex', metavar='<regex>', type=str, action='append', help='extract data from output and error of the command according to the "named groups" in <regex> (this option can be used several times). For example, --regex "real\\s(?P<minutes>\\d+)m(?P<seconds>\\d+.\\d+)" extracts minutes and seconds from the output of time in bash')
     parser.add_argument('command', metavar="<command>", help="command to run (and limit)")
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="arguments for <command>, or escaped pipes, i.e., \|, followed by other commands and arguments")
     args = parser.parse_args()
@@ -100,8 +100,8 @@ class TextOutput:
     def report(self):
         self.print("sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
-    def reportExtract(self, time, dict):
-        print("[r%10.3f] " % time, end="", file=self.process.log)
+    def reportExtract(self, resources, dict):
+        print("[r%10.3f] " % resources[0], end="", file=self.process.log)
         print("\t".join(["%s=%s" % (key, dict[key]) for key in dict.keys()]), file=self.process.log)
 
     
@@ -121,11 +121,8 @@ class TextOutput:
         self.print("end:  \t\t%s" % time.strftime("%c"))
         self.print("status:\t\t%s" % self.process.status)
         self.print("result:\t\t%s" % str(self.process.result))
-        if self.process.redirectOutput != self.process.redirectError:
-            self.print("output:\t\t%s" % str(self.process.redirectOutput))
-            self.print("error:\t\t%s" % str(self.process.redirectError))
-        else:
-            self.print("output+error:\t%s" % str(self.process.redirectOutput))
+        self.print("output:\t\t%s" % str(self.process.redirectOutput))
+        self.print("error:\t\t%s" % str(self.process.redirectError))
         self.print("children:\t\t%d" % len(self.process.subprocesses))
         self.print("real:\t\t%.3f seconds" % self.process.real)
         self.print("time:\t\t%.3f seconds" % (self.process.system + self.process.user))
@@ -148,10 +145,10 @@ class XmlOutput:
     def report(self):
         self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
-    def reportExtract(self, time, dict):
-        self.print("<regex real='%.3f'>" % time)
+    def reportExtract(self, resources, dict):
+        self.print("<regex real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f'>" % resources)
         for key in dict.keys():
-            self.print("<%s>%s</%s>" % (key, dict[key], key))
+            self.print("<group name='%s'>%s</group>" % (key, dict[key]))
         self.println("</regex>")
 
     def begin(self):
@@ -171,11 +168,8 @@ class XmlOutput:
         self.print(" end='%s'" % time.strftime("%c"))
         self.print(" status='%s'" % self.process.status)
         self.print(" result='%s'" % str(self.process.result))
-        if self.process.redirectOutput != self.process.redirectError:
-            self.print(" output='%s'" % str(self.process.redirectOutput))
-            self.print(" error='%s'" % str(self.process.redirectError))
-        else:
-            self.print(" output-and-error='%s'" % str(self.process.redirectOutput))
+        self.print(" output='%s'" % str(self.process.redirectOutput))
+        self.print(" error='%s'" % str(self.process.redirectError))
         self.print(" children='%d'" % len(self.process.subprocesses))
         self.print(" real='%.3f'" % self.process.real)
         self.print(" time='%.3f'" % (self.process.system + self.process.user))
@@ -206,9 +200,9 @@ class Subprocess:
             self.swap = self.swap + m.swap
 
 class Reader(threading.Thread):
-    def __init__(self, begin, input):
+    def __init__(self, process, input):
         threading.Thread.__init__(self)
-        self.begin = begin
+        self.process = process
         self.input = input
         self.lines = []
         self.active = False
@@ -220,7 +214,8 @@ class Reader(threading.Thread):
             if not line:
                 self.active = False
             else:
-                self.lines.append((time.time() - self.begin, line if line[-1] != '\n' else line[:-1]))
+                self.process.updateResourceUsage()
+                self.lines.append(((self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap), line if line[-1] != '\n' else line[:-1]))
             
     def stop(self):
         self.active = False
@@ -276,16 +271,21 @@ class Process(threading.Thread):
         self.begin = time.time()
         
         if self.redirectOutput != "/dev/stdout":
-            self.stdoutFile = open(self.redirectOutput, "w")
+            if self.redirectOutput == "/dev/stderr":
+                self.stdoutFile == sys.stderr
+            else:
+                self.stdoutFile = open(self.redirectOutput, "w")
         if self.redirectError != "/dev/stdout":
-            if self.redirectError != self.redirectOutput:
+            if self.redirectOutput == "/dev/stderr":
+                self.stderrFile = sys.stderr
+            elif self.redirectError != self.redirectOutput:
                 self.stderrFile = open(self.redirectError, "w")
             else:
                 self.stderrFile = self.stdoutFile
 
         self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.stdoutReader = Reader(self.begin, self.process.stdout)
-        self.stderrReader = Reader(self.begin, self.process.stderr)
+        self.stdoutReader = Reader(self, self.process.stdout)
+        self.stderrReader = Reader(self, self.process.stderr)
         self.stdoutReader.run()
         self.stderrReader.run()
         
@@ -297,9 +297,9 @@ class Process(threading.Thread):
         self.stdoutReader.stop()
         self.stderrReader.stop()
         self.processStreams()
-        if self.redirectOutput != "/dev/stdout":
+        if self.redirectOutput != "/dev/stdout" and self.redirectOutput != "/dev/stderr":
             self.stdoutFile.close()
-        if self.redirectError != "/dev/stdout" and self.redirectError != self.redirectOutput:
+        if self.redirectError != "/dev/stdout" and self.redirectError != "/dev/stderr" and self.redirectError != self.redirectOutput:
             self.stderrFile.close()
         
         if self.exit_code == None:
@@ -338,16 +338,16 @@ class Process(threading.Thread):
                         pass
                 break
     
-    def pretty_print(self, prefix, time, line, file):
+    def pretty_print(self, prefix, resources, line, file):
         if self.timestamp:
-            print("[%s%10.3f] %s" % (prefix, time, line), file=file)
+            print("[%s%10.3f] %s" % (prefix, resources[0], line), file=file)
         else:
             print(line, file=file)
         
         for regex in self.regexes:
             match = regex.match(line)
             if match:
-                self.output.reportExtract(time, match.groupdict())
+                self.output.reportExtract(resources, match.groupdict())
 
     def processStreams(self):
         stdout = self.stdoutReader.getLines()
@@ -361,25 +361,20 @@ class Process(threading.Thread):
             i = 0
             j = 0
             while i < len(stdout) and j < len(stderr):
-                if stdout[i][0] < stderr[j][0]:
+                if stdout[i][0][0] < stderr[j][0][0]:
                     self.pretty_print("o", stdout[i][0], stdout[i][1], self.stdoutFile)
                     i = i + 1
                 else:
                     self.pretty_print("e", stderr[j][0], stderr[j][1], self.stderrFile)
-                    j = i + 1
+                    j = j + 1
             while i < len(stdout):
                 self.pretty_print("o", stdout[i][0], stdout[i][1], self.stdoutFile)
                 i = i + 1
             while j < len(stderr):
                 self.pretty_print("e", stderr[j][0], stderr[j][1], self.stderrFile)
-                j = i + 1
+                j = j + 1
         
-    def sampler(self):
-        if self.done:
-            return
-
-        self.processStreams()
-        
+    def updateResourceUsage(self):
         subprocesses = [self.process]
         try:
             subprocesses.extend(self.process.get_children(recursive=True))
@@ -412,6 +407,13 @@ class Process(threading.Thread):
         for p in self.subprocesses:
             self.user = self.user + self.subprocesses[p].user
             self.system = self.system + self.subprocesses[p].system
+
+    def sampler(self):
+        if self.done:
+            return
+
+        self.processStreams()
+        self.updateResourceUsage()
         
         self.samplings = self.samplings + 1
         if int(self.real / self.reportFrequency) > self.numberOfReports:
