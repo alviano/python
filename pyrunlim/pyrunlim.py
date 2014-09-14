@@ -100,8 +100,8 @@ class TextOutput:
     def report(self):
         self.print("sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
-    def reportExtract(self, resources, dict):
-        print("[r%10.3f] " % resources[0], end="", file=self.process.log)
+    def reportExtract(self, real, resources, dict):
+        print("[r%10.3f] " % real, end="", file=self.process.log)
         print("\t".join(["%s=%s" % (key, dict[key]) for key in dict.keys()]), file=self.process.log)
 
     
@@ -145,8 +145,9 @@ class XmlOutput:
     def report(self):
         self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
-    def reportExtract(self, resources, dict):
-        self.print("<regex real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f'>" % resources)
+    def reportExtract(self, real, resources, dict):
+        self.print("<regex real='%.3f'>" % real)
+        self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
         for key in dict.keys():
             self.print("<group name='%s'>%s</group>" % (key, dict[key]))
         self.println("</regex>")
@@ -214,8 +215,8 @@ class Reader(threading.Thread):
             if not line:
                 self.active = False
             else:
-                self.process.updateResourceUsage()
-                self.lines.append(((self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap), line if line[-1] != '\n' else line[:-1]))
+                real = time.time() - self.process.begin
+                self.lines.append((real, line if line[-1] != '\n' else line[:-1], (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap)))
             
     def stop(self):
         self.active = False
@@ -338,40 +339,40 @@ class Process(threading.Thread):
                         pass
                 break
     
-    def pretty_print(self, prefix, resources, line, file):
+    def pretty_print(self, prefix, real, line, resources, file):
         if self.timestamp:
-            print("[%s%10.3f] %s" % (prefix, resources[0], line), file=file)
+            print("[%s%10.3f] %s" % (prefix, real, line), file=file)
         else:
             print(line, file=file)
         
         for regex in self.regexes:
             match = regex.match(line)
             if match:
-                self.output.reportExtract(resources, match.groupdict())
+                self.output.reportExtract(real, resources, match.groupdict())
 
     def processStreams(self):
         stdout = self.stdoutReader.getLines()
         stderr = self.stderrReader.getLines()
         if self.redirectOutput != self.redirectError:
             for line in stdout:
-                self.pretty_print("o", line[0], line[1], self.stdoutFile)
+                self.pretty_print("o", line[0], line[1], line[2], self.stdoutFile)
             for line in stderr:
-                self.pretty_print("e", line[0], line[1], self.stderrFile)
+                self.pretty_print("e", line[0], line[1], line[2], self.stderrFile)
         else:
             i = 0
             j = 0
             while i < len(stdout) and j < len(stderr):
-                if stdout[i][0][0] < stderr[j][0][0]:
-                    self.pretty_print("o", stdout[i][0], stdout[i][1], self.stdoutFile)
+                if stdout[i][0] < stderr[j][0]:
+                    self.pretty_print("o", stdout[i][0], stdout[i][1], stdout[i][2], self.stdoutFile)
                     i = i + 1
                 else:
-                    self.pretty_print("e", stderr[j][0], stderr[j][1], self.stderrFile)
+                    self.pretty_print("e", stderr[j][0], stderr[j][1], stderr[j][2], self.stderrFile)
                     j = j + 1
             while i < len(stdout):
-                self.pretty_print("o", stdout[i][0], stdout[i][1], self.stdoutFile)
+                self.pretty_print("o", stdout[i][0], stdout[i][1], stdout[i][2], self.stdoutFile)
                 i = i + 1
             while j < len(stderr):
-                self.pretty_print("e", stderr[j][0], stderr[j][1], self.stderrFile)
+                self.pretty_print("e", stderr[j][0], stderr[j][1], stderr[j][2], self.stderrFile)
                 j = j + 1
         
     def updateResourceUsage(self):
