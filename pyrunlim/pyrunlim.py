@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.3"
+VERSION = "2.4"
 
 import argparse
 import psutil
@@ -39,7 +39,8 @@ def parseArguments(process):
     parser.add_argument('-r', '--realtime', metavar='<integer>', type=int, help='set real time limit to <integer> seconds')
     parser.add_argument('-s', '--swap', metavar='<integer>', type=int, help='set swap limit to <integer> MB')
     parser.add_argument('-f', '--frequency', metavar='<integer>', type=int, help='set report frequency to <integer> seconds')
-    parser.add_argument('-a', '--affinity', metavar='<integers>', type=str, help='set cpu affinity to swap limit to <integers> (comma-separated list)')
+    parser.add_argument('-a', '--affinity', metavar='<integers>', type=str, help='set cpu affinity of the command to <integers> (comma-separated list)')
+    parser.add_argument('-A', '--pyrunlim-affinity', metavar='<integers>', type=str, help='set cpu affinity of pyrunlim to <integers> (comma-separated list)')
     parser.add_argument('-n', '--nice', metavar='<integer>', type=int, help='set nice to <integer> (default 20)')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
@@ -64,6 +65,8 @@ def parseArguments(process):
         process.reportFrequency = args.frequency
     if args.affinity != None:
         process.affinity = [int(a) for a in args.affinity.split(",")]
+    if args.pyrunlim_affinity != None:
+        process.setPyrunlimAffinity([int(a) for a in args.pyrunlim_affinity.split(",")])
     if args.nice != None:
         process.nice = args.nice
     if args.log != None:
@@ -86,7 +89,11 @@ def parseArguments(process):
         for regex in args.regex:
             process.regexes.append(re.compile(regex))
     process.args.append(args.command)
-    process.args.extend(args.args)
+    for arg in args.args:
+        arg = arg.replace('"', '\\"')
+        if ' ' in arg:
+            arg = '"%s"' % arg
+        process.args.append(arg)
     
 
 class OutputBuilder:
@@ -176,6 +183,7 @@ class TextOutput(OutputBuilder):
         self.print("memory limit:\t%d MB" % self.process.memorylimit)
         self.print("real time limit:\t%d seconds" % self.process.realtimelimit)
         self.print("swap limit:\t\t%d MB" % self.process.swaplimit)
+        self.print("pyrunlim cpu affinity:\t[%s]" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
         self.print("cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]))
         self.print("nice:\t\t%d" % self.process.nice)
         self.print("running:\t\tbash -c \"%s\"" % " ".join(self.process.args))
@@ -240,6 +248,7 @@ class XmlOutput(OutputBuilder):
         self.print(" real-time-limit='%d'" % self.process.realtimelimit)
         self.print(" swap-limit='%d'" % self.process.swaplimit)
         self.print(" cpu-affinity='%s'" % ", ".join([str(a) for a in self.process.affinity]))
+        self.print(" pyrunlim-cpu-affinity='%s'" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
         self.print(" nice='%d'" % self.process.nice)
         self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;"))
         self.print(" start='%s'" % time.strftime("%c"))
@@ -322,6 +331,9 @@ class Process(threading.Thread):
         self.max_memory = 0
         
         self.subprocesses = {}
+    
+    def setPyrunlimAffinity(self, value):
+        psutil.Process(os.getpid()).set_cpu_affinity(value)
     
     def _readOutputStream(self):
         while True:
