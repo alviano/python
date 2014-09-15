@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.2"
+VERSION = "2.3"
 
 import argparse
 import psutil
@@ -99,17 +99,38 @@ class OutputBuilder:
         self._report()
         self.lock.release()
     
-    def reportStream(self, prefix, real, line, resources, file):
+    def reportOutputStream(self, real, line, resources):
         self.lock.acquire()
-        if self.process.timestamp:
-            print("[%s%10.3f] %s" % (prefix, real, line), file=file)
-        else:
-            print(line, file=file)
         
+        if self.process.timestamp:
+            print("[o%10.3f] %s" % (real, line), file=self.process.stdoutFile)
+        else:
+            print(line, file=self.process.stdoutFile)
+        
+        self._reportOutputStreamBegin(real, line, resources)
         for regex in self.process.regexes:
             match = regex.match(line)
             if match:
-                self._reportExtract(real, resources, match.groupdict())
+                self._reportExtract(regex.pattern, match.groupdict())
+        self._reportOutputStreamEnd()
+                
+        self.lock.release()
+    
+    def reportErrorStream(self, real, line, resources):
+        self.lock.acquire()
+        
+        if self.process.timestamp:
+            print("[e%10.3f] %s" % (real, line), file=self.process.stderrFile)
+        else:
+            print(line, file=self.process.stderrFile)
+        
+        self._reportErrorStreamBegin(real, line, resources)
+        for regex in self.process.regexes:
+            match = regex.match(line)
+            if match:
+                self._reportExtract(regex.pattern, match.groupdict())
+        self._reportErrorStreamEnd()
+                
         self.lock.release()
     
     def begin(self):
@@ -132,9 +153,21 @@ class TextOutput(OutputBuilder):
         
     def _report(self):
         self.print("sample:\t\t%10.3f\t%10.3f\t%10.3f\t%10.1f\t%10.1f\t%10.1f" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
-    
-    def _reportExtract(self, real, resources, dict):
-        print("[r%10.3f] " % real, end="", file=self.process.log)
+
+    def _reportOutputStreamBegin(self, real, line, resources):
+        pass
+
+    def _reportOutputStreamEnd(self):
+        pass
+
+    def _reportErrorStreamBegin(self, real, line, resources):
+        pass
+
+    def _reportErrorStreamEnd(self):
+        pass
+
+    def _reportExtract(self, regex, dict):
+        print("[regex %s] " % regex, end="", file=self.process.log)
         print("\t".join(["%s=%s" % (key, dict[key]) for key in dict.keys()]), file=self.process.log)
 
     def _begin(self):
@@ -177,12 +210,28 @@ class XmlOutput(OutputBuilder):
     def _report(self):
         self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
-    def _reportExtract(self, real, resources, dict):
-        self.print("<regex real='%.3f'>" % real)
+    def _reportOutputStreamBegin(self, real, line, resources):
+        self.print("<stream type='stdout' real='%.3f'>" % real)
         self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
+        self.print("<line><!CDATA[%s]]></line>" % line.replace("]]>", "]]\n>"))
+
+    def _reportOutputStreamEnd(self):
+        self.println("</stream>")
+
+    def _reportErrorStreamBegin(self, real, line, resources):
+        self.print("<stream type='stderr' real='%.3f'>" % real)
+        self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
+        self.print("<line><!CDATA[%s]]></line>" % line)
+
+    def _reportErrorStreamEnd(self):
+        self.println("</stream>")
+
+    def _reportExtract(self, regex, dict):
+        self.print("<match>")
+        self.print("<regex><![CDATA[%s]]></regex>" % regex.replace("]]>", "]]\n>"))
         for key in dict.keys():
-            self.print("<group name='%s'>%s</group>" % (key, dict[key]))
-        self.println("</regex>")
+            self.print("<group name='%s'>%s</group>" % (key, dict[key] if dict[key].isdecimal() else "<![CDATA[%s]]>" % dict[key].replace("]]>", "]]\n>")))
+        self.print("</match>")
 
     def _begin(self):
         self.print("<pyrunlim version='%s'" % VERSION)
@@ -232,23 +281,6 @@ class Subprocess:
         for m in memory_maps:
             self.swap = self.swap + m.swap
 
-class Reader(threading.Thread):
-    def __init__(self, process, input, prefix, outfile):
-        threading.Thread.__init__(self)
-        self.process = process
-        self.input = input
-        self.prefix = prefix
-        self.outfile = outfile
-
-    def run(self):
-        while True:
-            line = self.input.readline().decode()
-            if not line:
-                break
-            else:
-                real = time.time() - self.process.begin
-                self.process.output.reportStream(self.prefix, real, line if line[-1] != '\n' else line[:-1], (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap), self.outfile)
-            
 class Process(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -291,6 +323,24 @@ class Process(threading.Thread):
         
         self.subprocesses = {}
     
+    def _readOutputStream(self):
+        while True:
+            line = self.process.stdout.readline().decode()
+            if not line:
+                break
+            else:
+                real = time.time() - self.begin
+                self.output.reportOutputStream(real, line if line[-1] != '\n' else line[:-1], (self.real, self.user, self.system, self.max_memory, self.rss, self.swap))
+
+    def _readErrorStream(self):
+        while True:
+            line = self.process.stderr.readline().decode()
+            if not line:
+                break
+            else:
+                real = time.time() - self.begin
+                self.output.reportErrorStream(real, line if line[-1] != '\n' else line[:-1], (self.real, self.user, self.system, self.max_memory, self.rss, self.swap))
+
     def run(self):
         self.output.begin()
         self.begin = time.time()
@@ -309,8 +359,8 @@ class Process(threading.Thread):
                 self.stderrFile = self.stdoutFile
 
         self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.stdoutReader = Reader(self, self.process.stdout, "o", self.stdoutFile)
-        self.stderrReader = Reader(self, self.process.stderr, "e", self.stderrFile)
+        self.stdoutReader = threading.Thread(target=self._readOutputStream)
+        self.stderrReader = threading.Thread(target=self._readErrorStream)
         self.stdoutReader.start()
         self.stderrReader.start()
         
@@ -393,7 +443,6 @@ class Process(threading.Thread):
         if self.done:
             return
 
-        #self.processStreams()
         self.updateResourceUsage()
         
         self.samplings = self.samplings + 1
@@ -424,7 +473,6 @@ class Process(threading.Thread):
     def end(self):
         self.stdoutReader.join()
         self.stderrReader.join()
-        #self.processStreams()
         
         self.output.end()
 
