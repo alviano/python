@@ -290,10 +290,8 @@ class Subprocess:
         for m in memory_maps:
             self.swap = self.swap + m.swap
 
-class Process(threading.Thread):
+class Process:
     def __init__(self):
-        threading.Thread.__init__(self)
-        
         self.output = TextOutput(self)
         
         self.args = []
@@ -304,8 +302,6 @@ class Process(threading.Thread):
         self.log = sys.stderr
         self.redirectOutput = "/dev/stdout"
         self.redirectError = "/dev/stdout"
-        self.stdoutReader = None
-        self.stderrReader = None
         self.stdoutFile = sys.stdout
         self.stderrFile = sys.stdout
         self.timestamp = True
@@ -370,20 +366,48 @@ class Process(threading.Thread):
                 self.stderrFile = self.stdoutFile
 
         self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.stdoutReader = threading.Thread(target=self._readOutputStream)
-        self.stderrReader = threading.Thread(target=self._readErrorStream)
-        self.stdoutReader.start()
-        self.stderrReader.start()
-        
         self.process.set_nice(self.nice)
         self.process.set_cpu_affinity(self.affinity)
-        self.result = self.process.wait()
+        
+        stdoutReader = threading.Thread(target=self._readOutputStream)
+        stderrReader = threading.Thread(target=self._readErrorStream)
+        stdoutReader.start()
+        stderrReader.start()
+        
+        waiter = threading.Thread(target=self._wait)
+        waiter.start()
+        count = 0
+        while waiter.is_alive():
+            count = count + 1
+            if count < 10:
+                time.sleep(.1)
+            elif count < 30:
+                time.sleep(.2)
+            elif count < 60:
+                time.sleep(.5)
+            else:
+                time.sleep(1)
+            self._sampler()
+        waiter.join()
 
         if self.exit_code == None:
             self.status = "complete"
             self.exit_code = 0
         
-        self._end()
+        stdoutReader.join()
+        stderrReader.join()
+        
+        self.output.end()
+
+        if self.stdoutFile != sys.stdout and self.stdoutFile != sys.stderr:
+            self.stdoutFile.close()
+        if self.stderrFile != sys.stdout and self.stderrFile != sys.stderr and self.redirectError != self.redirectOutput:
+            self.stderrFile.close()
+        if self.log != sys.stdout and self.log != sys.stderr:
+            self.log.close()
+            
+    def _wait(self):
+        self.result = self.process.wait()
         
     def _kill(self):
         try:
@@ -451,16 +475,15 @@ class Process(threading.Thread):
             self.user = self.user + self.subprocesses[p].user
             self.system = self.system + self.subprocesses[p].system
 
-    def sampler(self):
-        if self.is_alive():
-            self._updateResourceUsage()
-            
-            self.samplings = self.samplings + 1
-            if int(self.real / self.reportFrequency) > self.numberOfReports:
-                self.numberOfReports = self.numberOfReports + 1
-                self.output.report()
-            
-            self._checkLimit()
+    def _sampler(self):
+        self._updateResourceUsage()
+        
+        self.samplings = self.samplings + 1
+        if int(self.real / self.reportFrequency) > self.numberOfReports:
+            self.numberOfReports = self.numberOfReports + 1
+            self.output.report()
+        
+        self._checkLimit()
     
     def _checkLimit(self):
         if self.real > self.realtimelimit:
@@ -480,38 +503,10 @@ class Process(threading.Thread):
             self.exit_code = 4
             self._kill()
             
-    def _end(self):
-        self.stdoutReader.join()
-        self.stderrReader.join()
-        
-        self.output.end()
-
-        if self.stdoutFile != sys.stdout and self.stdoutFile != sys.stderr:
-            self.stdoutFile.close()
-        if self.stderrFile != sys.stdout and self.stderrFile != sys.stderr and self.redirectError != self.redirectOutput:
-            self.stderrFile.close()
-        if self.log != sys.stdout and self.log != sys.stderr:
-            self.log.close()
-            
 if __name__ == "__main__":
     process = Process()
     parseArguments(process)
     
-    process.start()
-
-    count = 0
-    while not process.is_alive():
-        count = count + 1
-        if count < 10:
-            time.sleep(.1)
-        elif count < 30:
-            time.sleep(.2)
-        elif count < 60:
-            time.sleep(.5)
-        else:
-            time.sleep(1)
-        process.sampler()
-    
-    process.join()
+    process.run()
     
     sys.exit(process.exit_code)
