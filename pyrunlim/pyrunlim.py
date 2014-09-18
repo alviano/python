@@ -183,7 +183,7 @@ class TextOutput(OutputBuilder):
         self.print("memory limit:\t%d MB" % self.process.memorylimit)
         self.print("real time limit:\t%d seconds" % self.process.realtimelimit)
         self.print("swap limit:\t\t%d MB" % self.process.swaplimit)
-        self.print("pyrunlim cpu affinity:\t[%s]" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
+        self.print("pyrunlim cpu affin.:\t[%s]" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
         self.print("cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]))
         self.print("nice:\t\t%d" % self.process.nice)
         self.print("running:\t\tbash -c \"%s\"" % " ".join(self.process.args).replace('"', '\\"'))
