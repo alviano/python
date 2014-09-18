@@ -314,7 +314,6 @@ class Process(threading.Thread):
         self.affinity = psutil.Process(os.getpid()).get_cpu_affinity()
         self.nice = 20
         
-        self.done = False
         self.samplings = 0
         self.reportFrequency = 10
         self.numberOfReports = 0
@@ -379,13 +378,14 @@ class Process(threading.Thread):
         self.process.set_nice(self.nice)
         self.process.set_cpu_affinity(self.affinity)
         self.result = self.process.wait()
-        self.done = True
 
         if self.exit_code == None:
             self.status = "complete"
             self.exit_code = 0
         
-    def kill(self):
+        self._end()
+        
+    def _kill(self):
         try:
             subprocesses = self.process.get_children(recursive=True)
         except psutil.NoSuchProcess:
@@ -417,7 +417,7 @@ class Process(threading.Thread):
                         pass
                 break
     
-    def updateResourceUsage(self):
+    def _updateResourceUsage(self):
         subprocesses = [self.process]
         try:
             subprocesses.extend(self.process.get_children(recursive=True))
@@ -452,37 +452,35 @@ class Process(threading.Thread):
             self.system = self.system + self.subprocesses[p].system
 
     def sampler(self):
-        if self.done:
-            return
-
-        self.updateResourceUsage()
-        
-        self.samplings = self.samplings + 1
-        if int(self.real / self.reportFrequency) > self.numberOfReports:
-            self.numberOfReports = self.numberOfReports + 1
-            self.output.report()
-        
-        self.checkLimit()
+        if self.is_alive():
+            self._updateResourceUsage()
+            
+            self.samplings = self.samplings + 1
+            if int(self.real / self.reportFrequency) > self.numberOfReports:
+                self.numberOfReports = self.numberOfReports + 1
+                self.output.report()
+            
+            self._checkLimit()
     
-    def checkLimit(self):
+    def _checkLimit(self):
         if self.real > self.realtimelimit:
             self.status = "out of time (real)"
             self.exit_code = 1
-            self.kill()
+            self._kill()
         elif self.user + self.system > self.timelimit:
             self.status = "out of time"
             self.exit_code = 2
-            self.kill()
+            self._kill()
         elif self.max_memory > self.memorylimit:
             self.status = "out of memory"
             self.exit_code = 3
-            self.kill()
+            self._kill()
         elif self.swap > self.swaplimit:
             self.status = "out of memory (swap)"
             self.exit_code = 4
-            self.kill()
+            self._kill()
             
-    def end(self):
+    def _end(self):
         self.stdoutReader.join()
         self.stderrReader.join()
         
@@ -502,7 +500,7 @@ if __name__ == "__main__":
     process.start()
 
     count = 0
-    while not process.done:
+    while not process.is_alive():
         count = count + 1
         if count < 10:
             time.sleep(.1)
@@ -515,6 +513,5 @@ if __name__ == "__main__":
         process.sampler()
     
     process.join()
-    process.end()
     
     sys.exit(process.exit_code)
