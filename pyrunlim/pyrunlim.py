@@ -186,7 +186,7 @@ class TextOutput(OutputBuilder):
         self.print("pyrunlim cpu affinity:\t[%s]" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
         self.print("cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]))
         self.print("nice:\t\t%d" % self.process.nice)
-        self.print("running:\t\tbash -c \"%s\"" % " ".join(self.process.args))
+        self.print("running:\t\tbash -c \"%s\"" % " ".join(self.process.args).replace('"', '\\"'))
         self.print("start:\t\t%s" % time.strftime("%c"))
         self.print("columns:\t\treal (s)\tuser (s)\tsys (s)  \tmax memory (MB)\trss (MB)   \tswap (MB)")
 
@@ -250,7 +250,7 @@ class XmlOutput(OutputBuilder):
         self.print(" cpu-affinity='%s'" % ", ".join([str(a) for a in self.process.affinity]))
         self.print(" pyrunlim-cpu-affinity='%s'" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
         self.print(" nice='%d'" % self.process.nice)
-        self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;"))
+        self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;").replace('"', '\\"'))
         self.print(" start='%s'" % time.strftime("%c"))
         self.println(">")
 
