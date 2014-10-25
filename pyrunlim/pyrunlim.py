@@ -335,18 +335,16 @@ class Process:
             line = self.process.stdout.readline().decode()
             if not line:
                 break
-            else:
-                real = time.time() - self.begin
-                self.output.reportOutputStream(real, line if line[-1] != '\n' else line[:-1], (self.real, self.user, self.system, self.max_memory, self.rss, self.swap))
+            real = time.time() - self.begin
+            self.output.reportOutputStream(real, line if line[-1] != '\n' else line[:-1], (self.real, self.user, self.system, self.max_memory, self.rss, self.swap))
 
     def _readErrorStream(self):
         while True:
             line = self.process.stderr.readline().decode()
             if not line:
                 break
-            else:
-                real = time.time() - self.begin
-                self.output.reportErrorStream(real, line if line[-1] != '\n' else line[:-1], (self.real, self.user, self.system, self.max_memory, self.rss, self.swap))
+            real = time.time() - self.begin
+            self.output.reportErrorStream(real, line if line[-1] != '\n' else line[:-1], (self.real, self.user, self.system, self.max_memory, self.rss, self.swap))
 
     def run(self):
         self.output.begin()
