@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.5"
+VERSION = "2.6"
 
 import argparse
 import psutil
@@ -113,6 +113,7 @@ class OutputBuilder:
             print("[o%10.3f] %s" % (real, line), file=self.process.stdoutFile)
         else:
             print(line, file=self.process.stdoutFile)
+        self.process.stdoutFile.flush()
         
         self._reportOutputStreamBegin(real, line, resources)
         for regex in self.process.regexes:
@@ -130,6 +131,7 @@ class OutputBuilder:
             print("[e%10.3f] %s" % (real, line), file=self.process.stderrFile)
         else:
             print(line, file=self.process.stderrFile)
+        self.process.stderrFile.flush()
         
         self._reportErrorStreamBegin(real, line, resources)
         for regex in self.process.regexes:
@@ -176,6 +178,7 @@ class TextOutput(OutputBuilder):
     def _reportExtract(self, regex, dict):
         print("[regex %s] " % regex, end="", file=self.process.log)
         print("\t".join(["%s=%s" % (key, dict[key]) for key in dict.keys()]), file=self.process.log)
+        self.process.log.flush()
 
     def _begin(self):
         self.print("version:\t\t%s" % VERSION)
