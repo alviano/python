@@ -422,26 +422,14 @@ class Process:
                 p.terminate()
             except psutil.NoSuchProcess:
                 pass
-            
-        elapsed = 0.0
-        while True:
-            time.sleep(0.1)
-            elapsed = elapsed + 0.1
 
-            running = False
-            for p in subprocesses:
-                if p.is_running():
-                    running = True
-            if not running:
-                break
-            if elapsed >= 1.0:
-                for p in subprocesses:
-                    try:
-                        p.kill()
-                    except psutil.NoSuchProcess:
-                        pass
-                break
-    
+        gone, alive = psutil.wait_procs(subprocesses, timeout=1)
+        for p in alive:
+            try:
+                p.kill()
+            except psutil.NoSuchProcess:
+                pass
+
     def _updateResourceUsage(self):
         subprocesses = [self.process]
         try:
