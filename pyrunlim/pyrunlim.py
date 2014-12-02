@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.7"
+VERSION = "2.8"
 
 import argparse
 import psutil
@@ -224,7 +224,7 @@ class XmlOutput(OutputBuilder):
     def _reportOutputStreamBegin(self, real, line, resources):
         self.print("<stream type='stdout' real='%.3f'>" % real)
         self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
-        self.print("<line><!CDATA[%s]]></line>" % line.replace("]]>", "]]\n>"))
+        self.print("<line><![CDATA[%s]]></line>" % line.replace("]]>", "]]\n>"))
 
     def _reportOutputStreamEnd(self):
         self.println("</stream>")
@@ -232,7 +232,7 @@ class XmlOutput(OutputBuilder):
     def _reportErrorStreamBegin(self, real, line, resources):
         self.print("<stream type='stderr' real='%.3f'>" % real)
         self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
-        self.print("<line><!CDATA[%s]]></line>" % line)
+        self.print("<line><![CDATA[%s]]></line>" % line)
 
     def _reportErrorStreamEnd(self):
         self.println("</stream>")
