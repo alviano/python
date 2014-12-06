@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.8"
+VERSION = "2.9"
 
 import argparse
 import psutil
@@ -437,8 +437,8 @@ class Process:
         except psutil.NoSuchProcess:
             pass
         
-        self.rss = 0
-        self.swap = 0
+        rss = 0
+        swap = 0
         for p in subprocesses:
             if p.pid not in self.subprocesses:
                 self.subprocesses[p.pid] = Subprocess()
@@ -448,11 +448,11 @@ class Process:
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
             
-            self.rss = self.rss + self.subprocesses[p.pid].rss
-            self.swap = self.swap + self.subprocesses[p.pid].swap
+            rss = rss + self.subprocesses[p.pid].rss
+            swap = swap + self.subprocesses[p.pid].swap
 
-        self.rss = self.rss / 1024 / 1024
-        self.swap = self.swap / 1024 / 1024
+        self.rss = rss / 1024 / 1024
+        self.swap = swap / 1024 / 1024
 
         if self.rss + self.swap > self.max_memory:
             self.max_memory = self.rss + self.swap
