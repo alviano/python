@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.9"
+VERSION = "2.10"
 
 import argparse
 import psutil
@@ -218,13 +218,28 @@ class XmlOutput(OutputBuilder):
         print(msg, file=self.process.log)
         self.process.log.flush()
 
+    def cdata(self, data):
+        data = data.split("]]>")
+        for i in range(0,len(data)):
+            self.print("<![CDATA[")
+            if i != 0: self.print(">")
+            LIMIT = 10000
+            for j in range(0, len(data[i]), LIMIT):
+                if j != 0: self.print("<![CDATA[")
+                self.print(data[i][j:j+LIMIT])
+                if j < len(data[i]) - LIMIT: self.print("]]>\n")
+            if i != len(data) - 1: self.print("]]")
+            self.print("]]>")
+
     def _report(self):
         self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
     def _reportOutputStreamBegin(self, real, line, resources):
         self.print("<stream type='stdout' real='%.3f'>" % real)
         self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
-        self.print("<line><![CDATA[%s]]></line>" % line.replace("]]>", "]]\n>"))
+        self.print("<line>")
+        self.cdata(line)
+        self.print("</line>")
 
     def _reportOutputStreamEnd(self):
         self.println("</stream>")
@@ -232,16 +247,23 @@ class XmlOutput(OutputBuilder):
     def _reportErrorStreamBegin(self, real, line, resources):
         self.print("<stream type='stderr' real='%.3f'>" % real)
         self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
-        self.print("<line><![CDATA[%s]]></line>" % line)
-
+        self.print("<line>")
+        self.cdata(line)
+        self.print("</line>")
+        
     def _reportErrorStreamEnd(self):
         self.println("</stream>")
 
     def _reportExtract(self, regex, dict):
         self.print("<match>")
-        self.print("<regex><![CDATA[%s]]></regex>" % regex.replace("]]>", "]]\n>"))
+        self.print("<regex>")
+        self.cdata(regex)
+        self.print("</regex>")
         for key in dict.keys():
-            self.print("<group name='%s'>%s</group>" % (key, dict[key] if dict[key].isdecimal() else "<![CDATA[%s]]>" % dict[key].replace("]]>", "]]\n>")))
+            self.print("<group name='%s'>" % (key,))
+            if dict[key].isdecimal(): self.print(dict[key])
+            else: self.cdata(dict[key])
+            self.print("</group>")
         self.print("</match>")
 
     def _begin(self):
