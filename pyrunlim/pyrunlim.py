@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.10"
+VERSION = "2.11"
 
 import argparse
 import psutil
@@ -219,18 +219,12 @@ class XmlOutput(OutputBuilder):
         self.process.log.flush()
 
     def cdata(self, data):
-        data = data.split("]]>")
-        for i in range(0,len(data)):
-            self.print("<![CDATA[")
-            if i != 0: self.print(">")
-            LIMIT = 10000
-            for j in range(0, len(data[i]), LIMIT):
-                if j != 0: self.print("<![CDATA[")
-                self.print(data[i][j:j+LIMIT])
-                if j < len(data[i]) - LIMIT: self.print("]]>\n")
-            if i != len(data) - 1: self.print("]]")
-            self.print("]]>")
-
+        LIMIT = 10000
+        for i in range(0, len(data), LIMIT):
+            if len(data) > LIMIT: self.print("<long-text>")
+            self.print("<![CDATA[%s]]>" % (data[i:i+LIMIT].replace("]]>", "]]]]><![CDATA[>"),))
+            if len(data) > LIMIT: self.print("</long-text>\n")
+            
     def _report(self):
         self.println("<sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % (self.process.real, self.process.user, self.process.system, self.process.max_memory, self.process.rss, self.process.swap))
     
