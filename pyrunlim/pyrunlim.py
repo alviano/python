@@ -2,7 +2,7 @@
 
 GPL = """
 Run a command reporting statistics and possibly limiting usage of resources.
-Copyright (C) 2014  Mario Alviano (mario@alviano.net)
+Copyright (C) 2014-2015  Mario Alviano (mario@alviano.net)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.11"
+VERSION = "2.12"
 
 import argparse
 import psutil
@@ -49,6 +49,7 @@ def parseArguments(process):
     parser.add_argument('-E', '--redirect-error', metavar='<filename>', type=str, help='redirect error of the command (incompatible with -R,--redirect)')
     parser.add_argument('--no-timestamp', action='store_true', help='do not timestamp output and error of the command')
     parser.add_argument('--regex', metavar='<regex>', type=str, action='append', help='extract data from output and error of the command according to the "named groups" in <regex> (this option can be used several times). For example, --regex "real\\s(?P<minutes>\\d+)m(?P<seconds>\\d+.\\d+)" extracts minutes and seconds from the output of time in bash')
+    parser.add_argument('--no-last-sample', action='store_true', help='do not print <last-sample> element when wrapping streams')
     parser.add_argument('command', metavar="<command>", help="command to run (and limit)")
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="arguments for <command>, or escaped pipes, i.e., \|, followed by other commands and arguments")
     args = parser.parse_args()
@@ -85,6 +86,8 @@ def parseArguments(process):
         process.redirectError = args.redirect_error
     if args.no_timestamp:
         process.timestamp = False
+    if args.no_last_sample:
+        process.printLastSample = False
     if args.regex:
         for regex in args.regex:
             process.regexes.append(re.compile(regex))
@@ -230,7 +233,8 @@ class XmlOutput(OutputBuilder):
     
     def _reportOutputStreamBegin(self, real, line, resources):
         self.print("<stream type='stdout' real='%.3f'>" % real)
-        self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
+        if self.process.printLastSample:
+            self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
         self.print("<line>")
         self.cdata(line)
         self.print("</line>")
@@ -240,7 +244,8 @@ class XmlOutput(OutputBuilder):
 
     def _reportErrorStreamBegin(self, real, line, resources):
         self.print("<stream type='stderr' real='%.3f'>" % real)
-        self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
+        if self.process.printLastSample:
+            self.print("<last-sample real='%.3f' user='%.3f' sys='%.3f' max-memory='%.1f' rss='%.1f' swap='%.1f' />" % resources)
         self.print("<line>")
         self.cdata(line)
         self.print("</line>")
@@ -324,6 +329,7 @@ class Process:
         self.stdoutFile = sys.stdout
         self.stderrFile = sys.stdout
         self.timestamp = True
+        self.printLastSample = True
         self.regexes = []
         
         self.affinity = psutil.Process(os.getpid()).get_cpu_affinity()
