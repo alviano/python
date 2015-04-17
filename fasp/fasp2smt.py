@@ -38,7 +38,6 @@ def parseArguments():
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
     parser.add_argument('-g', '--grounder', metavar='<grounder>', type=str, help='path to the gringo 3 (default \'gringo\')', default='gringo')
     parser.add_argument('-s', '--solver', metavar='<solver>', type=str, help='path to the SMT solver (default \'z3\')', default='z3')
-    parser.add_argument('--disable-completition', action='store_true', help='disable any form of completion')
     parser.add_argument('--disable-ordered-completition', action='store_true', help='disable ordered completion')
     parser.add_argument('--disable-sccs-computation', action='store_true', help='disable the computation of strongly connected components')
     parser.add_argument('--print-grounder-input', action='store_true', help='print the input of the grounder')
