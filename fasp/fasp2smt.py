@@ -27,14 +27,20 @@ import subprocess
 import sys
 import tempfile
 
+args = None
+
 def parseArguments():
     global VERSION
     global GPL
+    global args
     parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2015  Mario Alviano (mario@alviano.net)")
     parser.add_argument('--help-syntax', action='store_true', help='print syntax description and exit') 
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
     parser.add_argument('-g', '--grounder', metavar='<grounder>', type=str, help='path to the gringo 3 (default \'gringo\')', default='gringo')
     parser.add_argument('-s', '--solver', metavar='<solver>', type=str, help='path to the SMT solver (default \'z3\')', default='z3')
+    parser.add_argument('--disable-completition', action='store_true', help='disable any form of completion')
+    parser.add_argument('--disable-ordered-completition', action='store_true', help='disable ordered completion')
+    parser.add_argument('--disable-sccs-computation', action='store_true', help='disable the computation of strongly connected components')
     parser.add_argument('--print-grounder-input', action='store_true', help='print the input of the grounder')
     parser.add_argument('--print-grounder-output', action='store_true', help='print the output of the grounder')
     parser.add_argument('--print-smt-input', action='store_true', help='print the input of the SMT solver')
@@ -42,7 +48,6 @@ def parseArguments():
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="arguments for <grounder>")
     args = parser.parse_args()
     if args.help_syntax: helpSyntax()
-    return args
 
 def helpSyntax():
     print("""
@@ -83,6 +88,7 @@ def build(formula):
     if predicate == "min": return Min(args)
     if predicate == "max": return Max(args)
     if predicate == "neg": return Not(args[0])
+    print("error: unrecognized token:", formula)
     assert False
 
 
@@ -181,7 +187,6 @@ class Atom:
                 for a in recAtoms[2:]:
                     source = "(max2 %s %s)" % (source, recAtoms[0].sp())
                 definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (source, recAtoms[0].sp(), rule.completion(self)))
-                #definitions.append("(ite (and %s) %s 0)" % (" ".join(["(< %s %s)" % (s.sp(), self.sp()) for s in recAtoms]), rule.completion(self)))
             
         if len(definitions) == 0:
             theory.append("(assert (= %s 0))" % (self.outer(),))
@@ -493,7 +498,7 @@ def processComponent(compIdx, atoms, rules):
         return
         
     for rule in rules:
-        if rule.body.hasRecursiveOr(compIdx):
+        if args.disable_ordered_completition or rule.body.hasRecursiveOr(compIdx):
             for atom in atoms: atom.completion()
             encodeReduct(compIdx, atoms, rules)
             return
@@ -511,7 +516,6 @@ def normalize():
             theory.append("(declare-const x%d Int) (assert (or (= x%d 0) (= x%d 1)))" % (id,id,id))
         else:
             theory.append("(declare-const x%d Real) (assert (>= x%d 0)) (assert (<= x%d 1))" % (id,id,id))
-        #print(id, atom.getName(), file=sys.stderr)
 
     for rule in Rule.instances:
         rule.notifyHeadAtoms()
@@ -519,15 +523,18 @@ def normalize():
     for rule in Rational.heads:
         rule.outer()
     
-    components = computeComponents()
-    for i in range(0, len(components)):
-        processComponent(i, components[i][0], components[i][1])
+    if args.disable_sccs_computation:
+        processComponent(None, Atom.getInstances(), Rule.instances)
+    else:
+        components = computeComponents()
+        for i in range(0, len(components)):
+            processComponent(i, components[i][0], components[i][1])
 
     theory.append("(check-sat-using (then qe smt))")
     theory.append("(get-model)")
     
 if __name__ == "__main__":
-    args = parseArguments()
+    parseArguments()
 
     rules = []
     rules.append("expression(X) :- rule(X,Y).")
@@ -563,6 +570,7 @@ if __name__ == "__main__":
     gringo = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     [stdout, stderr] = gringo.communicate()
     tmpFile.close()
+    if(stderr.decode() != ""): print(stderr.decode(), end="")
     if args.print_grounder_output:
         print("<grounder-output>")
         print(stdout.decode(), end="")
@@ -595,6 +603,7 @@ if __name__ == "__main__":
     solver = subprocess.Popen([args.solver, tmpFile.name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     [stdout, stderr] = solver.communicate()
     tmpFile.close()
+    if(stderr.decode() != ""): print(stderr.decode(), end="")
     if args.print_smt_output:
         print("<smt-input>")
         print(stdout.decode(), end="")
