@@ -154,6 +154,9 @@ class Atom:
     def hasRecursiveAtom(self, compIdx):
         return self.getComponent() == compIdx
 
+    def isHCF(self, compIdx):
+        return True
+
     def recursiveAtoms(self, compIdx):
         return [self] if self.getComponent() == compIdx else []
 
@@ -178,7 +181,8 @@ class Atom:
         definitions = []
         for rule in self.getHeads():
             recAtoms = rule.body.recursiveAtoms(self.getComponent())
-            if len(recAtoms) == 0: definitions.append(rule.completion(self))
+            if len(recAtoms) == 0:
+                definitions.append("(ite (= %s 0) %s 0)" % (self.sp(), rule.completion(self)))
             elif len(recAtoms) == 1:
                 definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (self.sp(), recAtoms[0].sp(), rule.completion(self)))
             else:
@@ -226,6 +230,9 @@ class Rational:
         Rational._headIds.add(rule.id)
         Rational.heads.append(rule)
 
+    def getComponent(self):
+        return -1
+
     def addDepTo(self, atom):
         pass
 
@@ -234,15 +241,18 @@ class Rational:
 
     def hasRecursiveAtom(self, compIdx):
         return False
+        
+    def isHCF(self, compIdx):
+        return True
 
     def recursiveAtoms(self, compIdx):
         return []
 
     def outer(self):
-        return "(/ %d %d)" % (self.num, self.den)
+        return "(/ %d %d)" % (self.num, self.den) if self.den != 1 else str(self.num)
 
     def inner(self, compIdx):
-        return "(/ %d %d)" % (self.num, self.den)
+        return "(/ %d %d)" % (self.num, self.den) if self.den != 1 else str(self.num)
 
 class Or:
     def __init__(self, elements):
@@ -270,6 +280,13 @@ class Or:
         ret = []
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
+
+    def isHCF(self, compIdx):
+        count = 0
+        for e in self.elements:
+            if e.getComponent() == compIdx:
+                count = count + 1
+        return count <= 1
 
     def outer(self):
         return "(min2 (+ %s) 1)" % (" ".join([e.outer() for e in self.elements]),)
@@ -306,6 +323,13 @@ class And:
         ret = []
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
+        
+    def isHCF(self, compIdx):
+        count = 0
+        for e in self.elements:
+            if e.getComponent() == compIdx:
+                count = count + 1
+        return count <= 1
 
     def outer(self):
         return "(max2 (+ %s -%d) 0)" % (" ".join([e.outer() for e in self.elements]), len(self.elements)-1)
@@ -347,6 +371,9 @@ class Min:
         ret = []
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
+        
+    def isHCF(self, compIdx):
+        return true
 
     def outer(self):
         res = "(min2 %s %s)" % (self.elements[0].outer(), self.elements[1].outer())
@@ -389,6 +416,13 @@ class Max:
         ret = []
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
+        
+    def isHCF(self, compIdx):
+        count = 0
+        for e in self.elements:
+            if e.getComponent() == compIdx:
+                count = count + 1
+        return count <= 1
 
     def outer(self):
         res = "(max2 %s %s)" % (self.elements[0].outer(), self.elements[1].outer())
@@ -497,12 +531,12 @@ def processComponent(compIdx, atoms, rules):
         return
         
     for rule in rules:
-        if args.disable_ordered_completition or rule.body.hasRecursiveOr(compIdx):
+        if args.disable_ordered_completition or not rule.head.isHCF(compIdx) or rule.body.hasRecursiveOr(compIdx):
             for atom in atoms: atom.completion()
             encodeReduct(compIdx, atoms, rules)
             return
     
-    for atom in atoms: theory.append("(declare-const %s Int) (assert (>= %s 0)) (assert (<= %s %d))" % (atom.sp(), atom.sp(), atom.sp(), len(atoms)))
+    for atom in atoms: theory.append("(declare-const %s Int) (assert (>= %s 0)) (assert (<= %s %d))" % (atom.sp(), atom.sp(), atom.sp(), len(atoms)-1))
     for atom in atoms: atom.orderedCompletion()
 
 def normalize():

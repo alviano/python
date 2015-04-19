@@ -227,7 +227,7 @@ class Runner:
             if tag[0] == "/":
                 if tags.pop() != tag[1:]:
                     sys.exit("Can't fix this XML!")
-            elif line[-2:] != "/>":
+            elif line[-2:] != "/>" and not line.endswith("</%s>" % (tag,)):
                 tags.append(tag)
 
         while tags:
