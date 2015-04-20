@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.1"
+VERSION = "0.2"
 
 import argparse
 import re
@@ -38,8 +38,6 @@ def parseArguments():
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
     parser.add_argument('-g', '--grounder', metavar='<grounder>', type=str, help='path to the gringo 3 (default \'gringo\')', default='gringo')
     parser.add_argument('-s', '--solver', metavar='<solver>', type=str, help='path to the SMT solver (default \'z3\')', default='z3')
-    parser.add_argument('--disable-ordered-completition', action='store_true', help='disable ordered completion')
-    parser.add_argument('--disable-sccs-computation', action='store_true', help='disable the computation of strongly connected components')
     parser.add_argument('--print-grounder-input', action='store_true', help='print the input of the grounder')
     parser.add_argument('--print-grounder-output', action='store_true', help='print the output of the grounder')
     parser.add_argument('--print-smt-input', action='store_true', help='print the input of the SMT solver')
@@ -61,7 +59,11 @@ def getPredicate(string):
     return string[:-1].split("(", 1)[0]
 
 def getArgs(string):
-    return split(string[:-1].split("(", 1)[1])
+    tmp = string[:-1].split("(", 1)
+    if len(tmp) != 2:
+        print("error: expecting annotated element instead of", string)
+        sys.exit(-1)
+    return split(tmp[1])
     
 def split(args):
     res = [""]
@@ -88,7 +90,7 @@ def build(formula):
     if predicate == "max": return Max(args)
     if predicate == "neg": return Not(args[0])
     print("error: unrecognized token:", formula)
-    assert False
+    sys.exit(-1)
 
 
 class Atom:
@@ -531,7 +533,7 @@ def processComponent(compIdx, atoms, rules):
         return
         
     for rule in rules:
-        if args.disable_ordered_completition or not rule.head.isHCF(compIdx) or rule.body.hasRecursiveOr(compIdx):
+        if not rule.head.isHCF(compIdx) or rule.body.hasRecursiveOr(compIdx):
             for atom in atoms: atom.completion()
             encodeReduct(compIdx, atoms, rules)
             return
@@ -556,12 +558,9 @@ def normalize():
     for rule in Rational.heads:
         rule.outer()
     
-    if args.disable_sccs_computation:
-        processComponent(None, Atom.getInstances(), Rule.instances)
-    else:
-        components = computeComponents()
-        for i in range(0, len(components)):
-            processComponent(i, components[i][0], components[i][1])
+    components = computeComponents()
+    for i in range(0, len(components)):
+        processComponent(i, components[i][0], components[i][1])
 
     theory.append("(check-sat-using (then qe smt))")
     theory.append("(get-model)")
