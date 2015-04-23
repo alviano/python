@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.1"
+VERSION = "0.2"
 
 import argparse
 import subprocess
@@ -45,7 +45,7 @@ Moreover, predicates starting with the prefix 'gz_' are reserved for internal us
 and must not be used by the user. Remember also to not hide them!
 
 
-Supported aggregates are COUNT, SUM, MIN, MAX, EVEN, and ODD. Aggregate sets are
+Supported aggregates are COUNT, SUM, AVG, MIN, MAX, EVEN, and ODD. Aggregate sets are
 declared by means of predicate gz_set/3, where:
 
 - the first argument is the ID of an aggregate;
@@ -66,8 +66,8 @@ A COUNT aggregate can be added in a rule body by using predicate gz_count/3, whe
 - the third argument is an integer.
 
 
-Aggregates SUM, MIN, and MAX are similar, and use predicates gz_sum/3, gz_min/3,
-and gz_max/3.
+Aggregates SUM, AVG, MIN, and MAX are similar, and use predicates gz_sum/3, 
+gz_avg/3, gz_min/3, and gz_max/3.
 
 
 An EVEN aggregate can be added in a rule body by using predicate gz_even/1, where
@@ -76,7 +76,7 @@ predicate gz_odd/1.
 
 
 Remember that COUNT, EVEN, and ODD are applied on true atoms in the aggregate set,
-while SUM, MIN, and MAX are applied on the multiset of integers associated with
+while SUM, AVG MIN, and MAX are applied on the multiset of integers associated with
 true atoms in the aggregate set.
 
 
@@ -90,6 +90,7 @@ name2id = {}
 program = []
 aggregateSets = {}
 sums = {}
+avgs = {}
 mins = {}
 maxs = {}
 odds = {}
@@ -126,6 +127,9 @@ def readNames(line):
     elif typ == "sum":
         assert len(args) == 3
         sums[line[0]] = (args[0], args[1], int(args[2]))
+    elif typ == "avg":
+        assert len(args) == 3
+        avgs[line[0]] = (args[0], args[1], int(args[2]))
     elif typ == "min":
         assert len(args) == 3
         mins[line[0]] = (args[0], args[1], int(args[2]))
@@ -190,6 +194,23 @@ def rewriteSums():
         (name, comp, bound) = sums[id]
         callback[comp[1:-1]](id, aggregateSets[name], bound)
 
+def rewriteAvgs():
+    global maxId
+    for id in avgs:
+        (name, comp, bound) = avgs[id]
+        
+        sname = "#sum(%s)" % (name,)
+        sums[maxId+1] = (sname, comp, 0)
+        aggregateSets[sname] = (aggregateSets[name][0], [w - bound for w in aggregateSets[name][1]])
+        
+        cname = "#count(%s)" % (name,)
+        sums[maxId+2] = (cname, '">="', 1)
+        aggregateSets[cname] = (aggregateSets[name][0], [1 for w in aggregateSets[name][1]])
+        
+        print(1, id, 2, 0, maxId+1, maxId+2)
+        
+        maxId = maxId + 2
+        
 def rewriteMins():
     def le(id, aggregate, bound):
         for i in range(0, len(aggregate[0])):
@@ -346,6 +367,7 @@ def gelfondize():
         for a in pos:
             newpos.append(a)
             if a in sums: addDomain(sums[a], newpos)
+            elif a in avgs: addDomain(avgs[a], newpos)
             elif a in mins: addDomain(mins[a], newpos)
             elif a in maxs: addDomain(maxs[a], newpos)
             elif a in odds: addDomain(odds[a], newpos)
@@ -385,7 +407,8 @@ def gelfondize():
     callback = {1: normal, 3: choice, 8: disjunctive}
     for rule in program:
         callback[rule[0]](rule[1:])
-    
+
+    rewriteAvgs()
     rewriteSums()
     rewriteMins()
     rewriteMaxs()
@@ -411,6 +434,7 @@ if __name__ == "__main__":
         
         #external gz_count/3.
         #external gz_sum/3.
+        #external gz_avg/3.
         #external gz_min/3.
         #external gz_max/3.
         #external gz_odd/1.
