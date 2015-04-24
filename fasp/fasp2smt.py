@@ -182,6 +182,7 @@ class Atom:
             theory.append("(assert (= %s %s))" % (self.houter(), support))
 
     def orderedCompletion(self):
+        assert len(self.getHeads()) > 0
         definitions = []
         for rule in self.getHeads():
             recAtoms = rule.body.recursiveAtoms(self.getComponent())
@@ -190,9 +191,9 @@ class Atom:
                 continue
             
             source = recAtoms[0].sp()
-            for a in recAtoms[1:]:
-                source = "(max2 %s %s)" % (source, recAtoms[0].sp())
-            definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (source, recAtoms[0].sp(), rule.completion(self)))
+            for recAtom in recAtoms[1:]:
+                source = "(max2 %s %s)" % (source, recAtom.sp())
+            definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (self.sp(), source, rule.completion(self)))
 
         support = definitions[0]
         for d in definitions[1:]:
