@@ -166,18 +166,20 @@ class Atom:
         if headAtom is not None:
             assert self.getId() == headAtom.getId()
             assert self.getId() == rule.head.getId()
-            return rule.body.outer()
+            return rule.body.bouter()
         
         heads = self.getHeads()
         if len(heads) == 0:
-            theory.append("(assert (= %s 0))" % (self.outer(),))
-        elif len(heads) == 1:
-            theory.append("(assert (= %s %s))" % (self.outer(), heads[0].completion(self)))
+            theory.append("(assert (= %s 0))" % (self.houter(),))
+            return
+        
+        support = heads[0].completion(self)
+        for h in heads[1:]:
+            support = "(max2 %s %s)" % (support, h.completion(self))
+        if self.isInteger():
+            theory.append("(assert (= %s (ite (= %s 0) 0 1)))" % (self.houter(), support))
         else:
-            support = "(max2 %s %s)" % (heads[0].completion(self), heads[1].completion(self))
-            for h in heads[2:]:
-                support = "(max2 %s %s)" % (support, h.completion(self))
-            theory.append("(assert (= %s %s))" % (self.outer(), support))
+            theory.append("(assert (= %s %s))" % (self.houter(), support))
 
     def orderedCompletion(self):
         definitions = []
@@ -185,29 +187,32 @@ class Atom:
             recAtoms = rule.body.recursiveAtoms(self.getComponent())
             if len(recAtoms) == 0:
                 definitions.append("(ite (= %s 0) %s 0)" % (self.sp(), rule.completion(self)))
-            elif len(recAtoms) == 1:
-                definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (self.sp(), recAtoms[0].sp(), rule.completion(self)))
-            else:
-                source = "(max2 %s %s)" % (recAtoms[0].sp(), recAtoms[1].sp())
-                for a in recAtoms[2:]:
-                    source = "(max2 %s %s)" % (source, recAtoms[0].sp())
-                definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (source, recAtoms[0].sp(), rule.completion(self)))
+                continue
             
-        if len(definitions) == 0:
-            theory.append("(assert (= %s 0))" % (self.outer(),))
-        elif len(definitions) == 1:
-            theory.append("(assert (= %s %s))" % (self.outer(), definitions[0]))
-        else:
-            support = "(max2 %s %s)" % (definitions[0], definitions[1])
-            for d in definitions[2:]:
-                support = "(max2 %s %s)" % (support, d)
-            theory.append("(assert (= %s %s))" % (self.outer(), support))
+            source = recAtoms[0].sp()
+            for a in recAtoms[1:]:
+                source = "(max2 %s %s)" % (source, recAtoms[0].sp())
+            definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (source, recAtoms[0].sp(), rule.completion(self)))
 
-    def outer(self):
+        support = definitions[0]
+        for d in definitions[1:]:
+            support = "(max2 %s %s)" % (support, d)
+        if self.isInteger():
+            theory.append("(assert (= %s (ite (= %s 0) 0 1)))" % (self.houter(), support))
+        else:
+            theory.append("(assert (= %s %s))" % (self.houter(), support))
+
+    def houter(self):
         return "x%d" % (self.getId(),)
 
-    def inner(self, compIdx):
-        return "y%d" % (self.getId(),) if compIdx == self.getComponent() else self.outer()
+    def hinner(self, compIdx):
+        return "y%d" % (self.getId(),) if compIdx == self.getComponent() else self.houter()
+
+    def bouter(self):
+        return "x%d" % (self.getId(),)
+
+    def binner(self, compIdx):
+        return "y%d" % (self.getId(),) if compIdx == self.getComponent() else self.bouter()
 
     def sp(self):
         return "s%d" % (self.getId(),)
@@ -250,10 +255,16 @@ class Rational:
     def recursiveAtoms(self, compIdx):
         return []
 
-    def outer(self):
+    def houter(self):
         return "(/ %d %d)" % (self.num, self.den) if self.den != 1 else str(self.num)
 
-    def inner(self, compIdx):
+    def hinner(self, compIdx):
+        return "(/ %d %d)" % (self.num, self.den) if self.den != 1 else str(self.num)
+
+    def bouter(self):
+        return "(/ %d %d)" % (self.num, self.den) if self.den != 1 else str(self.num)
+
+    def binner(self, compIdx):
         return "(/ %d %d)" % (self.num, self.den) if self.den != 1 else str(self.num)
 
 class Or:
@@ -290,14 +301,25 @@ class Or:
                 count = count + 1
         return count <= 1
 
-    def outer(self):
-        return "(min2 (+ %s) 1)" % (" ".join([e.outer() for e in self.elements]),)
+    def houter(self):
+        return "(min2 (+ %s) 1)" % (" ".join([e.houter() for e in self.elements]),)
         
-    def inner(self, compIdx):
-        return "(min2 (+ %s) 1)" % (" ".join([e.inner(compIdx) for e in self.elements]),)
+    def hinner(self, compIdx):
+        return "(min2 (+ %s) 1)" % (" ".join([e.hinner(compIdx) for e in self.elements]),)
+
+    def bouter(self):
+        return "(min2 (+ %s) 1)" % (" ".join([e.bouter() for e in self.elements]),)
+        
+    def binner(self, compIdx):
+        return "(min2 (+ %s) 1)" % (" ".join([e.binner(compIdx) for e in self.elements]),)
         
     def completion(self, headAtom, rule):
-        return "(max2 (- %s %s) 0)" % (rule.body.outer(), " ".join([e.outer() for e in self.elements if e.getId() != headAtom.getId()]))
+        skip = None
+        for i in range(len(self.elements)):
+            if self.elements[i].getId() == headAtom.getId():
+                skip = i
+                break
+        return "(max2 (- %s %s) 0)" % (rule.body.bouter(), " ".join([self.elements[i].bouter() for i in range(len(self.elements)) if i != skip]))
 
 class And:
     def __init__(self, elements):
@@ -333,11 +355,17 @@ class And:
                 count = count + 1
         return count <= 1
 
-    def outer(self):
-        return "(max2 (+ %s -%d) 0)" % (" ".join([e.outer() for e in self.elements]), len(self.elements)-1)
+    def houter(self):
+        return "(max2 (+ %s -%d) 0)" % (" ".join([e.houter() for e in self.elements]), len(self.elements)-1)
         
-    def inner(self, compIdx):
-        return "(max2 (+ %s -%d) 0)" % (" ".join([e.inner(compIdx) for e in self.elements]), len(self.elements)-1)
+    def hinner(self, compIdx):
+        return "(max2 (+ %s -%d) 0)" % (" ".join([e.hinner(compIdx) for e in self.elements]), len(self.elements)-1)
+
+    def bouter(self):
+        return "(max2 (+ %s -%d) 0)" % (" ".join([e.bouter() for e in self.elements]), len(self.elements)-1)
+        
+    def binner(self, compIdx):
+        return "(max2 (+ %s -%d) 0)" % (" ".join([e.binner(compIdx) for e in self.elements]), len(self.elements)-1)
 
     def completion(self, headAtom, rule):
         skip = None
@@ -345,7 +373,7 @@ class And:
             if self.elements[i].getId() == headAtom.getId():
                 skip = i
                 break
-        return "(ite (> %s 0) (max2 (- %s %s -%d) 0) 0)" % (rule.body.outer(), rule.body.outer(), " ".join([self.elements[i].outer() for i in range(len(self.elements)) if i != skip]), len(self.elements)-1)
+        return "(ite (> %s 0) (max2 (- %s %s -%d) 0) 0)" % (rule.body.bouter(), rule.body.bouter(), " ".join([self.elements[i].bouter() for i in range(len(self.elements)) if i != skip]), len(self.elements)-1)
 
 class Min:
     def __init__(self, elements):
@@ -377,10 +405,22 @@ class Min:
     def isHCF(self, compIdx):
         return true
 
-    def outer(self):
-        res = "(min2 %s %s)" % (self.elements[0].outer(), self.elements[1].outer())
+    def houter(self):
+        res = "(min2 %s %s)" % (self.elements[0].houter(), self.elements[1].houter())
         for e in self.elements[2:]:
-            res = "(min2 %s %s)" % (res, e.outer())
+            res = "(min2 %s %s)" % (res, e.houter())
+        return res
+        
+    def hinner(self, compIdx):
+        res = "(min2 %s %s)" % (self.elements[0].hinner(compIdx), self.elements[1].hinner(compIdx))
+        for e in self.elements[2:]:
+            res = "(min2 %s %s)" % (res, e.hinner(compIdx))
+        return res
+
+    def bouter(self):
+        res = "(min2 %s %s)" % (self.elements[0].bouter(), self.elements[1].bouter())
+        for e in self.elements[2:]:
+            res = "(min2 %s %s)" % (res, e.bouter())
         return res
         
     def inner(self, compIdx):
@@ -390,7 +430,7 @@ class Min:
         return res
 
     def completion(self, headAtom, rule):
-        return rule.body.outer()
+        return rule.body.bouter()
 
 class Max:
     def __init__(self, elements):
@@ -426,21 +466,33 @@ class Max:
                 count = count + 1
         return count <= 1
 
-    def outer(self):
-        res = "(max2 %s %s)" % (self.elements[0].outer(), self.elements[1].outer())
+    def houter(self):
+        res = "(max2 %s %s)" % (self.elements[0].houter(), self.elements[1].houter())
         for e in self.elements[2:]:
-            res = "(max2 %s %s)" % (res, e.outer())
+            res = "(max2 %s %s)" % (res, e.houter())
         return res
         
-    def inner(self, compIdx):
-        res = "(max2 %s %s)" % (self.elements[0].inner(compIdx), self.elements[1].inner(compIdx))
+    def hinner(self, compIdx):
+        res = "(max2 %s %s)" % (self.elements[0].hinner(compIdx), self.elements[1].hinner(compIdx))
         for e in self.elements[2:]:
-            res = "(max2 %s %s)" % (res, e.inner(compIdx))
+            res = "(max2 %s %s)" % (res, e.hinner(compIdx))
+        return res
+
+    def bouter(self):
+        res = "(max2 %s %s)" % (self.elements[0].bouter(), self.elements[1].bouter())
+        for e in self.elements[2:]:
+            res = "(max2 %s %s)" % (res, e.bouter())
+        return res
+        
+    def binner(self, compIdx):
+        res = "(max2 %s %s)" % (self.elements[0].binner(compIdx), self.elements[1].binner(compIdx))
+        for e in self.elements[2:]:
+            res = "(max2 %s %s)" % (res, e.binner(compIdx))
         return res
 
     def completion(self, headAtom, rule):
-        body = rule.body.outer()
-        return "(ite (or %s) 0 %s)" % (" ".join(["(>= %s %s)" % (e.outer(), body) for e in self.elements if e.getId() != headAtom.getId()]), body)
+        body = rule.body.bouter()
+        return "(ite (or %s) 0 %s)" % (" ".join(["(>= %s %s)" % (e.bouter(), body) for e in self.elements if e.getId() != headAtom.getId()]), body)
 
 class Not:
     def __init__(self, element):
@@ -462,11 +514,11 @@ class Not:
     def recursiveAtoms(self, compIdx):
         return []
 
-    def outer(self):
-        return "(- 1 %s)" % (self.element.outer(),)
+    def bouter(self):
+        return "(- 1 %s)" % (self.element.bouter(),)
 
-    def inner(self, compIdx):
-        return "(- 1 %s)" % (self.element.outer(),)
+    def binner(self, compIdx):
+        return "(- 1 %s)" % (self.element.bouter(),)
         
 class Rule:
     instances = []
@@ -481,10 +533,10 @@ class Rule:
         self.head.notifyHeadAtoms(self)
 
     def outer(self):
-        theory.append("(assert (>= %s %s))" % (self.head.outer(), self.body.outer()))
+        theory.append("(assert (>= %s %s))" % (self.head.houter(), self.body.bouter()))
         
     def inner(self, compIdx):
-        return "(>= %s %s)" % (self.head.inner(compIdx), self.body.inner(compIdx))
+        return "(>= %s %s)" % (self.head.hinner(compIdx), self.body.binner(compIdx))
         
     def completion(self, headAtom):
         return self.head.completion(headAtom, self)
@@ -520,10 +572,10 @@ def computeComponents():
     return res
 
 def encodeReduct(compIdx, atoms, rules):
-    vars = " ".join(["(%s %s)" % (atom.inner(compIdx), "Int" if atom.isInteger() else "Real") for atom in atoms])
-    zero = " ".join(["(>= %s 0)" % (atom.inner(compIdx),) for atom in atoms])
-    subset = " ".join(["(<= %s %s)" % (atom.inner(compIdx),atom.outer()) for atom in atoms])
-    eq = " ".join(["(= %s %s)" % (atom.inner(compIdx),atom.outer()) for atom in atoms])
+    vars = " ".join(["(%s %s)" % (atom.hinner(compIdx), "Int" if atom.isInteger() else "Real") for atom in atoms])
+    zero = " ".join(["(>= %s 0)" % (atom.hinner(compIdx),) for atom in atoms])
+    subset = " ".join(["(<= %s %s)" % (atom.hinner(compIdx),atom.houter()) for atom in atoms])
+    eq = " ".join(["(= %s %s)" % (atom.hinner(compIdx),atom.houter()) for atom in atoms])
     reduct = " ".join(["%s" % (rule.inner(compIdx),) for rule in rules])
     theory.append("(assert (forall (%s) (=> (and %s %s %s) (and %s))))" % (vars, zero, subset, reduct, eq))
 
@@ -547,10 +599,7 @@ def normalize():
 
     for atom in Atom.getInstances():
         id = atom.getId()
-        if atom.isInteger():
-            theory.append("(declare-const x%d Int) (assert (or (= x%d 0) (= x%d 1)))" % (id,id,id))
-        else:
-            theory.append("(declare-const x%d Real) (assert (>= x%d 0)) (assert (<= x%d 1))" % (id,id,id))
+        theory.append("(declare-const x%d Real) (assert (>= x%d 0)) (assert (<= x%d 1))" % (id,id,id))
 
     for rule in Rule.instances:
         rule.notifyHeadAtoms()
@@ -661,6 +710,7 @@ if __name__ == "__main__":
         for i in range(2, len(stdout), 2):
             match = regexId.match(stdout[i])
             if match:
+                atom = atoms[int(match.group(1))]
                 matchReal = regexReal.match(stdout[i+1])
                 if matchReal:
                     degree = "%s\t\t(%s)" % (matchReal.group(1), matchReal.group(1))
@@ -671,5 +721,5 @@ if __name__ == "__main__":
                         print(stdout[i+1])
                         assert False
                 
-                print("\t%s\t%s" % (atoms[int(match.group(1))].getName(), degree))
+                print("\t%s\t%s" % (atom.getName(), degree))
                 
