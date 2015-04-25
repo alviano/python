@@ -156,8 +156,8 @@ class Atom:
     def hasRecursiveAtom(self, compIdx):
         return self.getComponent() == compIdx
 
-    def isHCF(self, compIdx):
-        return True
+    def inhibitOrderedCompletion(self, compIdx):
+        return False
 
     def recursiveAtoms(self, compIdx):
         return [self] if self.getComponent() == compIdx else []
@@ -183,25 +183,21 @@ class Atom:
 
     def orderedCompletion(self):
         assert len(self.getHeads()) > 0
+        assert not self.isInteger()
+        
         definitions = []
         for rule in self.getHeads():
             recAtoms = rule.body.recursiveAtoms(self.getComponent())
             if len(recAtoms) == 0:
-                definitions.append("(ite (= %s 0) %s 0)" % (self.sp(), rule.completion(self)))
+                definitions.append("(and (= %s %s) (= %s 1))" % (self.houter(), rule.completion(self), self.sp()))
                 continue
             
             source = recAtoms[0].sp()
             for recAtom in recAtoms[1:]:
                 source = "(max2 %s %s)" % (source, recAtom.sp())
-            definitions.append("(ite (= %s (+ %s 1)) %s 0)" % (self.sp(), source, rule.completion(self)))
+            definitions.append("(and (= %s %s) (= %s (+ 1 %s)))" % (self.houter(), rule.completion(self), self.sp(), source))
 
-        support = definitions[0]
-        for d in definitions[1:]:
-            support = "(max2 %s %s)" % (support, d)
-        if self.isInteger():
-            theory.append("(assert (= %s (ite (= %s 0) 0 1)))" % (self.houter(), support))
-        else:
-            theory.append("(assert (= %s %s))" % (self.houter(), support))
+        theory.append("(assert (=> (> %s 0) (or %s)))" % (self.houter(), " ".join(definitions)))
 
     def houter(self):
         return "x%d" % (self.getId(),)
@@ -250,8 +246,8 @@ class Rational:
     def hasRecursiveAtom(self, compIdx):
         return False
         
-    def isHCF(self, compIdx):
-        return True
+    def inhibitOrderedCompletion(self, compIdx):
+        return False
 
     def recursiveAtoms(self, compIdx):
         return []
@@ -295,12 +291,12 @@ class Or:
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
 
-    def isHCF(self, compIdx):
+    def inhibitOrderedCompletion(self, compIdx):
         count = 0
         for e in self.elements:
             if e.getComponent() == compIdx:
                 count = count + 1
-        return count <= 1
+        return count > 1
 
     def houter(self):
         return "(min2 (+ %s) 1)" % (" ".join([e.houter() for e in self.elements]),)
@@ -349,12 +345,8 @@ class And:
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
         
-    def isHCF(self, compIdx):
-        count = 0
-        for e in self.elements:
-            if e.getComponent() == compIdx:
-                count = count + 1
-        return count <= 1
+    def inhibitOrderedCompletion(self, compIdx):
+        return True
 
     def houter(self):
         return "(max2 (+ %s -%d) 0)" % (" ".join([e.houter() for e in self.elements]), len(self.elements)-1)
@@ -403,8 +395,8 @@ class Min:
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
         
-    def isHCF(self, compIdx):
-        return true
+    def inhibitOrderedCompletion(self, compIdx):
+        return False
 
     def houter(self):
         res = "(min2 %s %s)" % (self.elements[0].houter(), self.elements[1].houter())
@@ -460,12 +452,8 @@ class Max:
         for e in self.elements: ret.extend(e.recursiveAtoms(compIdx))
         return ret
         
-    def isHCF(self, compIdx):
-        count = 0
-        for e in self.elements:
-            if e.getComponent() == compIdx:
-                count = count + 1
-        return count <= 1
+    def inhibitOrderedCompletion(self, compIdx):
+        return True
 
     def houter(self):
         res = "(max2 %s %s)" % (self.elements[0].houter(), self.elements[1].houter())
@@ -581,17 +569,21 @@ def encodeReduct(compIdx, atoms, rules):
     theory.append("(assert (forall (%s) (=> (and %s %s %s) (and %s))))" % (vars, zero, subset, reduct, eq))
 
 def processComponent(compIdx, atoms, rules):
+    for atom in atoms: atom.completion()
+    
     if len(atoms) == 1 and atoms[0].getId() not in deps[atoms[0].getId()]:
-        atoms[0].completion()
         return
-        
+    
     for rule in rules:
-        if not rule.head.isHCF(compIdx) or rule.body.hasRecursiveOr(compIdx):
-            for atom in atoms: atom.completion()
+        if rule.head.inhibitOrderedCompletion(compIdx) or rule.body.hasRecursiveOr(compIdx):
+            encodeReduct(compIdx, atoms, rules)
+            return
+    for atom in atoms:
+        if atom.isInteger():
             encodeReduct(compIdx, atoms, rules)
             return
     
-    for atom in atoms: theory.append("(declare-const %s Int) (assert (>= %s 0)) (assert (<= %s %d))" % (atom.sp(), atom.sp(), atom.sp(), len(atoms)-1))
+    for atom in atoms: theory.append("(declare-const %s Int) (assert (>= %s 1)) (assert (<= %s %d))" % (atom.sp(), atom.sp(), atom.sp(), len(atoms)))
     for atom in atoms: atom.orderedCompletion()
 
 def normalize():
