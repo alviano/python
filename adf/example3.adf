@@ -1,0 +1,8 @@
+% This is an ADF encoding the Nixon's example.
+
+s(X) :- ac(X,_).
+
+ac(a, neg(p)).
+ac(p, neg(a)).
+
+% S-stable models: {a}, {p}

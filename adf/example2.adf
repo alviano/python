@@ -1,0 +1,9 @@
+% This is ADF F_2 in the paper.
+
+s(X) :- ac(X,_).
+
+ac(a, neg(b)).
+ac(b, neg(a)).
+ac(c, or(b,and(b,c))).
+
+% S-stable models: {a}

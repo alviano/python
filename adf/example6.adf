@@ -1,0 +1,9 @@
+% This is adf(\Pi_5) in the paper.
+
+s(X) :- ac(X,_).
+
+ac(a, or(and(neg(b),neg(c)), and(b,c))).
+ac(b, or(a,c)).
+ac(c, b).
+
+% S-stable models: -

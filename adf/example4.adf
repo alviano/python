@@ -1,0 +1,10 @@
+% This is adf(def(\Pi_3)) in the paper.
+
+s(X) :- ac(X,_).
+
+ac(a, or(aux_g,aux_h)).
+ac(aux_g, neg(b)).
+ac(aux_h, b).
+ac(b, falsum).
+
+% S-stable models: {a, aux_g}

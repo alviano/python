@@ -2,7 +2,7 @@
 
 GPL = """
 Instantiate ASP programs in order to compute G-stable models by means of ordinary ASP solvers.
-Copyright (C) 2015  XXX YYY (EMAIL)
+Copyright (C) 2015  Mario Alviano (mario@alviano.net)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ import tempfile
 def parseArguments():
     global VERSION
     global GPL
-    parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2015  XXX YYY (EMAIL)")
+    parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2015  Mario Alviano (mario@alviano.net)")
     parser.add_argument('--help-syntax', action='store_true', help='print syntax description and exit') 
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
     parser.add_argument('-g', '--grounder', metavar='<grounder>', type=str, help='path to the gringo 3 (default \'gringo\')')
