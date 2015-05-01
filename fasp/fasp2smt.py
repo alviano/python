@@ -56,7 +56,54 @@ def parseArguments():
 
 def helpSyntax():
     print("""
-TODO: explain how to encode FASP programs.
+FASP programs are sets of rules. Each rule must be written in a single line, and each line can contain at most one rule. A rule has a head and a body, separated by the implication symbol :-, and it is terminated by a dot. For example,
+    
+    head :- body.
+
+Either the head or the body can be omitted. For example, the followings are valid rules:
+
+    head.
+    head :- .
+    :- body.
+
+The first two rules above are called facts, and are shortcut for
+
+    head :- #1.
+
+while the third rule is called constraint, and is a shortcut for
+
+    #0 :- body.
+
+A head is either an atom, or sequence of atoms separated by a fuzzy connective. For example,
+
+    a + b + c :- body.
+
+is a rule using Lukasiewicz disjunction as head connective. At most one kind of connective can be used in the same rule head. The available connectives are + (plus; Lukasiewicz disjunction), * (times; Lukasiewicz conjunction), | (pipe; Godel disjunction), and , (comma; Godel conjunction).
+
+A body is a possibly nested expression made combining atoms with fuzzy connectives and default negation, where default negation is denoted not or ~. For example,
+
+    head :- a * (b + ~c).
+
+is a rule whose body is the Lukasiewicz conjunction of atom a with the result of the Lukasiewivz disjunction between atom b and the negation of atom c.
+
+Atoms are formed by a predicate and a possibly empty list of arguments. For example,
+
+    p :- q(X,0).
+    
+is a rule whose head is the propositional atom p, and whose body is the atom with predicate q and arguments X (a variable) and 0 (a constant). Note that the arguments use the usual syntax of Prolog/ASP.
+
+Atoms can be also numeric constants in the interval [0,1]. For example,
+
+    p :- #0.5.
+    q :- #1/2.
+
+declare p and q to be at least one half.
+
+There is a third kind of atom that can be used to specify some arithmetic conditions (and will be used only during the grounding phase). Such atoms are specified in brackets. For example,
+
+    p(X) :- #0.5, [X = 1..5].
+
+declares p(X) to be at least 0.5 for each substitution of X in [1..5].
     """)
     sys.exit()
 
@@ -619,12 +666,6 @@ if __name__ == "__main__":
     parseArguments()
 
     rules = []
-
-    for file in args.files:
-        with open(file) as f:
-            for line in f:
-                rules.append(parser.parse(line))
-
     rules.append("expression(X) :- rule(X,Y).")
     rules.append("expression(Y) :- rule(X,Y).")
     rules.append("atom(X) :- expression(atom(X)).")
@@ -639,10 +680,16 @@ if __name__ == "__main__":
         for conn in ["min", "max", "and", "or"]:
             for j in range(1,i+1):
                 rules.append("expression(X%d) :- expression(%s(X%s))." % (j, conn, vars))
-    
+
     rules.append("#hide.")
     rules.append("#show rule(X,Y) : not delete(X,Y).")
     rules.append("#show integer/1.")
+
+    rules.append("\n%%%%%%%%%%%%%%%%\n% user program\n")
+    for file in args.files:
+        with open(file) as f:
+            for line in f:
+                rules.append(parser.parse(line))
 
     if args.print_grounder_input: 
         print("<grounder-input>")
