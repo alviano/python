@@ -18,10 +18,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.2"
+VERSION = "0.3"
 
 import argparse
 import re
+import os
+from parser import parser
 import scc
 import subprocess
 import sys
@@ -42,8 +44,14 @@ def parseArguments():
     parser.add_argument('--print-grounder-output', action='store_true', help='print the output of the grounder')
     parser.add_argument('--print-smt-input', action='store_true', help='print the input of the SMT solver')
     parser.add_argument('--print-smt-output', action='store_true', help='print the output of the SMT solver')
-    parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="arguments for <grounder>")
+    parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="input files, and arguments for <grounder>")
     args = parser.parse_args()
+    
+    args.files = []
+    args.grounder_args = []
+    for arg in args.args:
+        if os.path.isfile(arg) or arg == "/dev/stdin": args.files.append(arg)
+        else: args.grounder_args.append(arg)
     if args.help_syntax: helpSyntax()
 
 def helpSyntax():
@@ -611,6 +619,12 @@ if __name__ == "__main__":
     parseArguments()
 
     rules = []
+
+    for file in args.files:
+        with open(file) as f:
+            for line in f:
+                rules.append(parser.parse(line))
+
     rules.append("expression(X) :- rule(X,Y).")
     rules.append("expression(Y) :- rule(X,Y).")
     rules.append("atom(X) :- expression(atom(X)).")
@@ -639,7 +653,7 @@ if __name__ == "__main__":
     tmpFile.flush()
 
     cmd = [args.grounder]
-    cmd.extend(args.args)
+    cmd.extend(args.grounder_args)
     cmd.append(tmpFile.name)
     gringo = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     [stdout, stderr] = gringo.communicate()
