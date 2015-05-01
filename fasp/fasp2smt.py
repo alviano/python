@@ -695,6 +695,7 @@ if __name__ == "__main__":
         print("<grounder-input>")
         print("\n".join(rules))
         print("</grounder-input>")
+        sys.stdout.flush()
     tmpFile = tempfile.NamedTemporaryFile()
     tmpFile.write("\n".join(rules).encode())
     tmpFile.flush()
@@ -713,6 +714,7 @@ if __name__ == "__main__":
         print("<grounder-error>")
         print(stderr.decode(), end="")
         print("</grounder-error>")
+        sys.stdout.flush()
     stdout = stdout.decode().split("\n")
     
     state = 0
@@ -731,6 +733,7 @@ if __name__ == "__main__":
         print("<smt-input>")
         print("\n".join(theory))
         print("</smt-input>")
+        sys.stdout.flush()
     tmpFile = tempfile.NamedTemporaryFile()
     tmpFile.write("\n".join(theory).encode())
     tmpFile.flush()
@@ -746,6 +749,7 @@ if __name__ == "__main__":
         print("<smt-error>")
         print(stderr.decode(), end="")
         print("</smt-error>")
+        sys.stdout.flush()
     stdout = stdout.decode().split("\n")
     
     assert len(stdout) > 0
