@@ -34,6 +34,8 @@ t_POPEN = r'\('
 t_PCLOSE = r'\)'
 t_COMMA = r','
 
+t_ignore_COMMENT = r'%.*'
+
 def t_ARITH(t):
     r'\[[^\]]*\]'
     t.value = t.value[1:-1]
