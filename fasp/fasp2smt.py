@@ -471,10 +471,10 @@ class Min:
             res = "(min2 %s %s)" % (res, e.bouter())
         return res
         
-    def inner(self, compIdx):
-        res = "(min2 %s %s)" % (self.elements[0].inner(compIdx), self.elements[1].inner(compIdx))
+    def binner(self, compIdx):
+        res = "(min2 %s %s)" % (self.elements[0].binner(compIdx), self.elements[1].binner(compIdx))
         for e in self.elements[2:]:
-            res = "(min2 %s %s)" % (res, e.inner(compIdx))
+            res = "(min2 %s %s)" % (res, e.binner(compIdx))
         return res
 
     def completion(self, headAtom, rule):
