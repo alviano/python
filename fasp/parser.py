@@ -59,7 +59,7 @@ def t_DECIMAL(t):
     r'\#0(\.\d+)?|\#1'
     t.value = t.value[1:]
     if t.value in ['0', '1']: t.value = "fraction(%s,1)" % (t.value,)
-    else: t.value = "decimal(%s)" % (t.value[2:],)
+    else: t.value = "fraction(%d,10**%d)" % (int(t.value[2:]), len(t.value[2:]))
     return t
 
 def t_newline(t):
