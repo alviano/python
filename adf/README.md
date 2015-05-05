@@ -9,10 +9,13 @@ The following tools are required:
 
 To compute all S-stable models of ADF example3.adf, use the following command-line:
 
+<pre>
 $ s-stable-models.fy example3.asp | clasp 0
+</pre>
 
 If everything is OK, you should see the following output:
 
+<pre>
 clasp version 3.1.1
 Reading from stdin
 Solving...
@@ -26,4 +29,5 @@ Models       : 2
 Calls        : 1
 Time         : 0.000s (Solving: 0.00s 1st Model: 0.00s Unsat: 0.00s)
 CPU Time     : 0.000s
+</pre>
 
