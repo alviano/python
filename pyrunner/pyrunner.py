@@ -2,7 +2,7 @@
 
 GPL = """
 Run benchmarks.
-Copyright (C) 2014  Mario Alviano (mario@alviano.net)
+Copyright (C) 2014-2015  Mario Alviano (mario@alviano.net)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 import argparse
 import fileinput
@@ -37,9 +37,9 @@ dirname = os.path.dirname(__file__)
 def parseArguments(runner):
     global VERSION
     global GPL
-    parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2014  Mario Alviano (mario@alviano.net)")
+    parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2014-2015  Mario Alviano (mario@alviano.net)")
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
-    parser.add_argument('-r', '--run', metavar='<filename>', type=str, help='python code defining benchmarks and commands')
+    parser.add_argument('-r', '--run', metavar='<filename>', type=str, action='append', help='python code defining benchmarks and commands (use this flag for each file to be run)')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
     parser.add_argument('-d', '--output-directory', metavar='<output-directory>', type=str, default='.', help='directory for storing output files (default is .)')
@@ -47,7 +47,7 @@ def parseArguments(runner):
     args = parser.parse_args()
     
     if args.run != None:
-        runner.runfile = args.run
+        runner.runfiles = args.run
     if args.log != None:
         runner.log = open(args.log, 'w')
     if args.output != None:
@@ -115,7 +115,7 @@ class Runner:
         global dirname
         self.beginTime = time.time()
         self.setPyrunlim(pyrunlim)
-        self.runfile = ""
+        self.runfile = []
         self.commands = {}
         self.commandsOrder = []
         self.benchmarks = {}
@@ -150,13 +150,14 @@ class Runner:
         
     def _replaceDirname(self):
         global dirname
-        if not os.path.exists(self.runfile):
-            sys.exit("File not found: %s" % (self.runfile,))
-        if os.path.isabs(self.runfile[0]):
-            dirname =  os.path.dirname(self.runfile)
-        else:
-            dirname = "%s/%s" % (os.getcwd(),  os.path.dirname(self.runfile))
-        exec(open(self.runfile).read())
+        for file in self.runfile:
+            if not os.path.exists(file):
+                sys.exit("File not found: %s" % (file,))
+            if os.path.isabs(file[0]):
+                dirname =  os.path.dirname(file)
+            else:
+                dirname = "%s/%s" % (os.getcwd(),  os.path.dirname(file))
+            exec(open(file).read())
         for benchmark in self.benchmarks:
             self.benchmarks[benchmark].validator.setDirname(dirname)
         for command in self.commands:
