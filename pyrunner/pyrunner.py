@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 import argparse
 import fileinput
@@ -39,7 +39,7 @@ def parseArguments(runner):
     global GPL
     parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2014-2015  Mario Alviano (mario@alviano.net)")
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
-    parser.add_argument('-r', '--run', metavar='<filename>', type=str, action='append', help='python code defining benchmarks and commands (use this flag for each file to be run)')
+    parser.add_argument('-r', '--run', metavar='<filename>', action='append', help='python code defining benchmarks and commands (use this flag for each file to be run)')
     parser.add_argument('-l', '--log', metavar='<filename>', type=str, help='save log to <filename> (default STDERR)')
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
     parser.add_argument('-d', '--output-directory', metavar='<output-directory>', type=str, default='.', help='directory for storing output files (default is .)')
@@ -115,7 +115,7 @@ class Runner:
         global dirname
         self.beginTime = time.time()
         self.setPyrunlim(pyrunlim)
-        self.runfile = []
+        self.runfiles = []
         self.commands = {}
         self.commandsOrder = []
         self.benchmarks = {}
@@ -150,7 +150,7 @@ class Runner:
         
     def _replaceDirname(self):
         global dirname
-        for file in self.runfile:
+        for file in self.runfiles:
             if not os.path.exists(file):
                 sys.exit("File not found: %s" % (file,))
             if os.path.isabs(file[0]):
