@@ -18,9 +18,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.1"
+VERSION = "0.2"
 
 import argparse
+import scc
 import subprocess
 import sys
 import tempfile
@@ -28,14 +29,20 @@ import tempfile
 def parseArguments():
     global VERSION
     global GPL
+    global dependencies
+    global auxOf
     parser = argparse.ArgumentParser(description=GPL.split("\n")[1], epilog="Copyright (C) 2015  Mario Alviano (mario@alviano.net)")
     parser.add_argument('--help-syntax', action='store_true', help='print syntax description and exit') 
     parser.add_argument('-v', '--version', action='version', version='%(prog)s ' + VERSION, help='print version number')
     parser.add_argument('-g', '--grounder', metavar='<grounder>', type=str, help='path to the gringo 3 (default \'gringo\')')
+    parser.add_argument('-d', '--dependencies', action='store_true', help='handle positive dependencies')
+    parser.add_argument('-a', '--smart-auxiliaries', action='store_true', help='reuse auxiliary atoms')
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="arguments for <grounder>")
     args = parser.parse_args()
     if args.help_syntax: helpSyntax()
     if not args.grounder: args.grounder = 'gringo'
+    if args.dependencies: dependencies = {}
+    if args.smart_auxiliaries: auxOf = {}
     return args
 
 def helpSyntax():
@@ -79,6 +86,9 @@ Variables can be used taking into account the previous description.
     """)
     sys.exit()
 
+dependencies = None
+component = None
+
 id2name = {}
 name2id = {}
 
@@ -93,12 +103,51 @@ evens = {}
 
 aux = []
 maxId = 0
+auxOf = None
+
+def getAuxOf(a):
+    global maxId
+    if auxOf is None:
+        maxId = maxId + 1
+        return maxId
+    if a not in auxOf:
+        maxId = maxId + 1
+        auxOf[a] = maxId
+    return auxOf[a]
+
+def addDependency(a, b):
+    assert dependencies is not None
+    if a not in dependencies: dependencies[a] = set()
+    dependencies[a].add(b)
+
+def addDependencies(a, b):
+    assert dependencies is not None
+    if a not in dependencies: dependencies[a] = set()
+    dependencies[a] = dependencies[a].union(b)
+    
+def areRecursive(a, b):
+    if dependencies is None: return True
+    return component[a] == component[b]
 
 def readProgram(line):
     global maxId
     num = [int(a) for a in line]
     maxId = max(maxId, max(num))
     program.append(num)
+    
+    if dependencies is not None:
+        if num[0] == 1:
+            if num[1] != 1:
+                for i in num[4+num[3]:]:
+                    addDependency(num[1], i)
+        elif num[0] == 2 or num[0] == 5:
+            assert False
+        elif num[0] == 3 or num[0] == 8:
+            s = set()
+            for i in num[4+num[1]+num[3+num[1]]:]:
+                s.add(i)
+            for i in num[2:2+num[1]]:
+                addDependencies(i, s)
     
 def readNames(line):
     line[0] = int(line[0])
@@ -143,18 +192,24 @@ def rewriteSums():
         global maxId
         lit = []
         w = []
+        nlit = []
+        nw = []
         for i in range(0, len(aggregate[0])):
             if aggregate[1][i] >= 0:
                 lit.append(name2id[aggregate[0][i]])
                 w.append(aggregate[1][i])
+            elif not areRecursive(id, name2id[aggregate[0][i]]):
+                nlit.append(name2id[aggregate[0][i]])
+                nw.append(-aggregate[1][i])
+                bound = bound -aggregate[1][i]
             else:
-                maxId = maxId + 1
-                aux.append((maxId, name2id[aggregate[0][i]], id_aux))
-                lit.append(maxId)
+                auxId = getAuxOf(name2id[aggregate[0][i]])
+                aux.append((auxId, name2id[aggregate[0][i]], id_aux))
+                lit.append(auxId)
                 w.append(-aggregate[1][i])
                 bound = bound -aggregate[1][i]
                 
-        print(5, id, bound, len(aggregate[0]), 0, " ".join([str(l) for l in lit]), " ".join([str(c) for c in w]))
+        print(5, id, bound, len(aggregate[0]), len(nlit), " ".join([str(l) for l in nlit]), " ".join([str(l) for l in lit]), " ".join([str(c) for c in nw]), " ".join([str(c) for c in w]))
     
     def gt(id, aggregate, bound, id_aux):
         ge(id, aggregate, bound + 1, id_aux)
@@ -405,9 +460,38 @@ def addAuxRules():
         print("1 %d 1 0 %d" % (a[0], a[2]))
         print("8 2 %d %d 1 1 %d" % (a[1], a[0], comp[a[2]]))
 
+def computeComponents():
+    global component
+    
+    dependencies[-1] = set()
+    for i in range(1,maxId): addDependency(i, -1)
+
+    for id in sums:
+        (name, comp, bound) = sums[id]
+        lits, coeffs = aggregateSets[name]
+        for i in range(0,len(lits)):
+            if comp in ['">="','">"']:
+                if coeffs[i] > 0: addDependency(id, name2id[lits[i]])
+            if comp in ['"<="','"<"']:
+                if coeffs[i] < 0: addDependency(id, name2id[lits[i]])
+            elif comp in ['"!="','"="']:
+                if coeffs[i] != 0: addDependency(id, name2id[lits[i]])
+    
+    sccs = scc.strongly_connected_components_iterative(list(dependencies.keys()), dependencies)
+    component = {}
+    idx = 0
+    for c in sccs:
+        if -1 in c:
+            assert len(c) == 1
+            continue
+        idx = idx + 1
+        for i in c: component[i] = idx
+
 def normalize():
     for rule in program:
         print(" ".join([str(a) for a in rule]))
+    
+    if dependencies is not None: computeComponents()
     
     rewriteSums()
     rewriteAvgs()
