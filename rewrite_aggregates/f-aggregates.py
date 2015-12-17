@@ -140,8 +140,12 @@ def readProgram(line):
             if num[1] != 1:
                 for i in num[4+num[3]:]:
                     addDependency(num[1], i)
-        elif num[0] == 2 or num[0] == 5:
-            assert False
+        elif num[0] == 2:
+            for i in num[5+num[3]:]:
+                addDependency(num[1], i)
+        elif num[0] == 5:
+            for i in num[5+num[4]:5+num[3]]:
+                addDependency(num[1], i)
         elif num[0] == 3 or num[0] == 8:
             s = set()
             for i in num[4+num[1]+num[3+num[1]]:]:
