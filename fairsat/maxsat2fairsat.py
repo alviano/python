@@ -19,8 +19,9 @@ if __name__ == "__main__":
         line = line.strip().split()
         if line[0] == 'p':
             assert(line[1] == 'wcnf')
-            vars, clauses = [int(x) for x in line[2:]]
-            top = line[-1] if len(line[2:]) == 3 else 2**63
+            vars = int(line[2])
+            clauses = int(line[3])
+            top = int(line[4]) if len(line) > 4 else 2**63
         elif line[0] == 'c': continue
         elif line[0] == str(top):
             gamma.append(" ".join(line[1:]))
