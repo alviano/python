@@ -100,6 +100,8 @@ mins = {}
 maxs = {}
 odds = {}
 evens = {}
+iffs = {}
+iffds = {}
 
 aux = []
 maxId = 0
@@ -152,7 +154,19 @@ def readProgram(line):
                 s.add(i)
             for i in num[2:2+num[1]]:
                 addDependencies(i, s)
-    
+
+def split(args):
+    res = [""]
+    count = 0
+    for i in range(0, len(args)):
+        if args[i] == ',' and count == 0: 
+            res.append("")
+            continue
+        if args[i] == '(': count = count + 1
+        elif args[i] == ')': count = count - 1
+        res[-1] = res[-1] + args[i]
+    return res
+
 def readNames(line):
     line[0] = int(line[0])
     
@@ -163,7 +177,7 @@ def readNames(line):
     line[1] = line[1][2:]
     line[1] = line[1][:-1]
     line[1] = line[1].split("(",1)
-    (typ, args) = (line[1][0], line[1][1].split(',', 2))
+    (typ, args) = (line[1][0], split(line[1][1]))
     if typ == "set":
         assert len(args) == 3
         if args[0] not in aggregateSets: aggregateSets[args[0]] = ([],[])
@@ -190,6 +204,12 @@ def readNames(line):
     elif typ == "even":
         assert len(args) == 1
         evens[line[0]] = (args[0],)
+    elif typ == "iff":
+        assert(len(args) == 1)
+        iffs[line[0]] = (args[0],)
+    elif typ == "iffd":
+        assert(len(args) == 1)
+        iffds[line[0]] = (args[0],)
 
 def rewriteSums():
     def ge(id, aggregate, bound, id_aux):
@@ -451,7 +471,32 @@ def rewriteEvens():
                 aux.append((maxId+1, name2id[aggr[i]], id))
                 aux.append((maxId+3, maxId+2, id))
                 maxId = maxId + 3
-                        
+
+def rewriteIffs():
+    for id in iffs:
+        (name,) = iffs[id]
+        atom = name2id[name]
+        for rule in program:
+            if rule[0] == 1 and rule[1] == atom:
+                #print(rule)
+                for b in rule[4:4+rule[3]]:
+                    print("1 1 2 0 %d %d" % (b, atom))
+                for b in rule[4+rule[3]:]:
+                    print("1 %d 1 0 %d" % (b, atom))
+
+def rewriteIffds():
+    for id in iffds:
+        (name,) = iffds[id]
+        atom = name2id[name]
+        h = []
+        for rule in program:
+            if rule[0] == 1 and rule[1] == atom:
+                #print(rule)
+                assert rule[2] == 1
+                assert rule[3] == 0
+                h.append(rule[4])
+        print("8 %d %s 1 0 %d" % (len(h), " ".join([str(i) for i in h]), atom))
+
 def addAuxRules():
     global maxId
     comp = {}
@@ -503,6 +548,8 @@ def normalize():
     rewriteMaxs()
     rewriteOdds()
     rewriteEvens()
+    rewriteIffs()
+    rewriteIffds()
     addAuxRules()
     
     print(0)
