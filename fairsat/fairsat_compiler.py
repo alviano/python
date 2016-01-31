@@ -5,7 +5,7 @@ import os
 from pyparsing import *
 import fractions
 
-encoding = []
+encoding = ["1 0"]
 objectFunctions = []
 
 def getId(tokens):
@@ -14,8 +14,8 @@ def getId(tokens):
         getId.idMap[var] = len(getId.idVec)
         getId.idVec.append(var)
     return getId.idMap[var]
-getId.idMap = {}
-getId.idVec = [0]
+getId.idMap = {"TRUE" : 1}
+getId.idVec = [0, "TRUE"]
 
 def getIdUnary(v):
     global encoding
@@ -116,23 +116,31 @@ if __name__ == "__main__":
             encoding.append("%d 0" % cnf(phi))
 
         n = 1
-        d = None
-        count = 0
+        shift = 0
         for agent in agents:
+            neg = 0
             for f in agent:
-                if len(f) == 3 and f[2] != 1:
-                    count = count + 1
-                    n = n * f[2]
-                    d = fractions.gcd(d, f[2]) if d is not None else f[2]
-        if count >= 2: n = int(n/d)
+                assert(len(f) in [2,3])
+                if len(f) == 2: f.append(1)
+                assert(f[1] != 0)
+                assert(f[2] > 0)
+                n = n * f[2] / fractions.gcd(n, f[2])
+                if f[1] < 0: neg = neg + f[1]/f[2]
+            if neg < shift: shift = neg
+        shift = int(-shift * n)
         for agent in agents:
+            neg = shift
             for f in agent:
-                if len(f) == 3:
-                    f[1] = f[1] * int(n/f[2])
-                    f[2] = 1
-                else:
-                    f[1] = f[1] * n
-                        
+                assert(len(f) == 3)
+                f[1] = f[1] * int(n/f[2])
+                f.pop()
+                if f[1] < 0:
+                    neg = neg + f[1]
+                    f[1] = -f[1]
+                    f[0] = "!(%s)" % (f[0],)
+            if neg > 0:
+                agent.append(["TRUE", neg])
+
         for agent in agents:
             objectFunctions.append(buildObjectFunction(agent))
         
