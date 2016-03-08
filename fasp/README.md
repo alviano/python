@@ -5,6 +5,10 @@ Fuzzy answer set programming solver based on satisfiability modulo theories.
 
 Requirements:
 
+- python 3: https://www.python.org/
+
+- PLY: http://www.dabeaz.com/ply/
+
 - gringo 3: http://sourceforge.net/projects/potassco/files/gringo/3.0.5/
 
 - z3: http://z3.codeplex.com/releases
