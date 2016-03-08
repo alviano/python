@@ -189,7 +189,7 @@ class TextOutput(OutputBuilder):
         self.print("memory limit:\t%d MB" % self.process.memorylimit)
         self.print("real time limit:\t%d seconds" % self.process.realtimelimit)
         self.print("swap limit:\t\t%d MB" % self.process.swaplimit)
-        self.print("pyrunlim cpu affin.:\t[%s]" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
+        self.print("pyrunlim cpu affin.:\t[%s]" % ", ".join([str(a) for a in psutil.Process(os.getpid()).cpu_affinity()]))
         self.print("cpu affinity:\t[%s]" % ", ".join([str(a) for a in self.process.affinity]))
         self.print("nice:\t\t%d" % self.process.nice)
         self.print("running:\t\tbash -c \"%s\"" % " ".join(self.process.args).replace('"', '\\"'))
@@ -272,7 +272,7 @@ class XmlOutput(OutputBuilder):
         self.print(" real-time-limit='%d'" % self.process.realtimelimit)
         self.print(" swap-limit='%d'" % self.process.swaplimit)
         self.print(" cpu-affinity='%s'" % ", ".join([str(a) for a in self.process.affinity]))
-        self.print(" pyrunlim-cpu-affinity='%s'" % ", ".join([str(a) for a in psutil.Process(os.getpid()).get_cpu_affinity()]))
+        self.print(" pyrunlim-cpu-affinity='%s'" % ", ".join([str(a) for a in psutil.Process(os.getpid()).cpu_affinity()]))
         self.print(" nice='%d'" % self.process.nice)
         self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;").replace('"', '\\"'))
         self.print(" start='%s'" % time.strftime("%c"))
@@ -332,7 +332,7 @@ class Process:
         self.printLastSample = True
         self.regexes = []
         
-        self.affinity = psutil.Process(os.getpid()).get_cpu_affinity()
+        self.affinity = psutil.Process(os.getpid()).cpu_affinity()
         self.nice = 20
         
         self.samplings = 0
@@ -353,7 +353,7 @@ class Process:
         self.subprocesses = {}
     
     def setPyrunlimAffinity(self, value):
-        psutil.Process(os.getpid()).set_cpu_affinity(value)
+        psutil.Process(os.getpid()).cpu_affinity(value)
     
     def _readOutputStream(self):
         while True:
@@ -389,8 +389,8 @@ class Process:
                 self.stderrFile = self.stdoutFile
 
         self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.process.set_nice(self.nice)
-        self.process.set_cpu_affinity(self.affinity)
+        self.process.nice(self.nice)
+        self.process.cpu_affinity(self.affinity)
         
         stdoutReader = threading.Thread(target=self._readOutputStream)
         stderrReader = threading.Thread(target=self._readErrorStream)
@@ -434,7 +434,7 @@ class Process:
         
     def _kill(self):
         try:
-            subprocesses = self.process.get_children(recursive=True)
+            subprocesses = self.process.children(recursive=True)
         except psutil.NoSuchProcess:
             subprocesses = []
         subprocesses = [p for p in subprocesses if p.cmdline != self.process.cmdline]
@@ -455,7 +455,7 @@ class Process:
     def _updateResourceUsage(self):
         subprocesses = [self.process]
         try:
-            subprocesses.extend(self.process.get_children(recursive=True))
+            subprocesses.extend(self.process.children(recursive=True))
         except psutil.NoSuchProcess:
             pass
         
@@ -466,7 +466,7 @@ class Process:
                 self.subprocesses[p.pid] = Subprocess()
                     
             try:
-                self.subprocesses[p.pid].update(p.get_cpu_times(), p.get_memory_info(), p.get_memory_maps())
+                self.subprocesses[p.pid].update(p.cpu_times(), p.memory_info(), p.memory_maps())
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
             
