@@ -508,6 +508,7 @@ def addAuxRules():
         print("1 %d 1 1 %d" % (a[0], a[1]))
         print("1 %d 1 0 %d" % (a[0], a[2]))
         print("8 2 %d %d 1 1 %d" % (a[1], a[0], comp[a[2]]))
+        #print("8 3 %d %d %d 0 0" % (a[1], a[0], comp[a[2]]))
 
 def computeComponents():
     global component
