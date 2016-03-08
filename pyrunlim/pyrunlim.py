@@ -280,7 +280,6 @@ class XmlOutput(OutputBuilder):
 
     def _end(self):
         self.print("<stats")
-        self.print(" ran='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;").replace('"', '\\"'))
         self.print(" end='%s'" % time.strftime("%c"))
         self.print(" status='%s'" % self.process.status)
         self.print(" result='%s'" % str(self.process.result))
