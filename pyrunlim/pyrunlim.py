@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.12"
+VERSION = "2.13"
 
 import argparse
 import psutil
@@ -279,7 +279,8 @@ class XmlOutput(OutputBuilder):
         self.println(">")
 
     def _end(self):
-        self.print("<stats ")
+        self.print("<stats")
+        self.print(" running='bash -c \"%s\"'" % " ".join(self.process.args).replace("'", "&apos;").replace('"', '\\"'))
         self.print(" end='%s'" % time.strftime("%c"))
         self.print(" status='%s'" % self.process.status)
         self.print(" result='%s'" % str(self.process.result))
