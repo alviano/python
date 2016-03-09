@@ -203,7 +203,7 @@ if __name__ == "__main__":
     
     while True:
         try:
-            s = raw_input('calc > ')
+            s = input('calc > ')
         except EOFError:
             break
         if not s: continue
