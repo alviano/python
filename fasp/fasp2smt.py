@@ -28,6 +28,7 @@ import scc
 import subprocess
 import sys
 import tempfile
+from pyparsing import OneOrMore, nestedExpr
 
 args = None
 
@@ -111,6 +112,7 @@ declares p(X) to be at least 0.5 for each substitution of X in [1..5].
 
 deps = {-1 : set()}
 theory = []
+solver = None
 
 def getPredicate(string):
     return string[:-1].split("(", 1)[0]
@@ -781,57 +783,6 @@ def processComponent(compIdx, atoms, rules):
     for atom in atoms: theory.append("(declare-const %s Int) (assert (>= %s 1)) (assert (<= %s %d))" % (atom.sp(), atom.sp(), atom.sp(), len(atoms)))
     for atom in atoms: atom.orderedCompletion()
 
-def simplify():
-    return True
-    modified = True
-    while modified:
-        while modified:
-            modified = False
-            for rule in Rule.instances:
-                if rule.isNormalRule():
-                    h = rule.head.getLowerBound()
-                    b = rule.body.getLowerBound()
-                    if b > h:
-                        rule.head.setLowerBound(b)
-                        modified = True
-        
-        for atom in Atom.getInstances(): atom.resetUpperBound()
-        for atom in Atom.getInstances():
-            ub = 0.0
-            for rule in atom.getHeads():
-                if rule.isNormalRule():
-                    x = rule.body.getUpperBound()
-                    if x > ub: ub = x
-                else:
-                    ub = 1.0
-            atom.setUpperBound(ub)
-        for atom in Atom.getInstances():
-            if atom.getUpperBound() < atom.getPreviousUpperBound():
-                modified = True
-            if atom.getUpperBound() > atom.getPreviousUpperBound():
-                return False
-    
-    newRules = []
-    for rule in Rule.instances:
-        lb = rule.head.getLowerBound()
-        ub = rule.head.getUpperBound()
-        if lb == ub and lb >= rule.body.getUpperBound(): continue
-        rule.removeFacts()
-        newRules.append(rule)
-    Rule.instances = newRules
-    for atom in Atom.getInstances(): atom.resetHeads()
-    Rational.heads = []
-    for rule in Rule.instances:
-        rule.notifyHeadAtoms()
-
-    for atom in Atom.getInstances():
-        if atom.getLowerBound() == atom.getUpperBound():
-            atom.setModel(str(atom.getLowerBound()))
-
-        
-    
-    return True
-
 def normalize():
     theory.append("(define-fun min2 ((x1 Real) (x2 Real)) Real (ite (<= x1 x2) x1 x2))")
     theory.append("(define-fun max2 ((x1 Real) (x2 Real)) Real (ite (>= x1 x2) x1 x2))")
@@ -848,58 +799,75 @@ def normalize():
     for i in range(0, len(components)):
         processComponent(i, components[i][0], components[i][1])
 
-def solve(addendum=[]):
+def solve(theory, addendum=[]):
+    global solver
+    
     input = list(theory)
+    input.append("(push 1)")
     input.extend(addendum)
-    input.append("(check-sat)") #-using (then qe smt))")
-    input.append("(get-model)")
+    input.append("(check-sat)\n") #-using (then qe smt))")
     
     if args.print_smt_input:
         print("<smt-input>")
         print("\n".join(input))
         print("</smt-input>")
         sys.stdout.flush()
-    tmpFile = tempfile.NamedTemporaryFile()
-    tmpFile.write("\n".join(input).encode())
-    tmpFile.flush()
     
-    solver = subprocess.Popen([args.solver, tmpFile.name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    [stdout, stderr] = solver.communicate()
-    tmpFile.close()
-    if(stderr.decode() != ""): print(stderr.decode(), end="")
+    if solver is None: solver = subprocess.Popen([args.solver, "-in"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    solver.stdin.write("\n".join(input).encode())
+    solver.stdin.flush()
+    out = solver.stdout.readline()
+    out = out.decode()
     if args.print_smt_output:
         print("<smt-output>")
-        print(stdout.decode(), end="")
+        print(out, end="")
         print("</smt-output>")
-        print("<smt-error>")
-        print(stderr.decode(), end="")
-        print("</smt-error>")
         sys.stdout.flush()
-    stdout = stdout.decode().split("\n")
-    return stdout
+    
+    res = None
+    if out == 'sat\n':
+        if args.print_smt_input:
+            print("<smt-input>")
+            print("(get-model)")
+            print("</smt-input>")
+            sys.stdout.flush()
+        solver.stdin.write("(get-model)\n".encode())
+        solver.stdin.flush()
+        res = []
+        while True:
+            line = solver.stdout.readline()
+            line = line.decode()[:-1]
+            res.append(line)
+            if line == ')': break
+        if args.print_smt_output:
+            print("<smt-output>")
+            print("\n".join(res))
+            print("</smt-output>")
+            sys.stdout.flush()
 
+    solver.stdin.write("(pop 1)".encode())
+    solver.stdin.flush()
+    if args.print_smt_input:
+        print("<smt-input>")
+        print("(pop 1)")
+        print("</smt-input>")
+        sys.stdout.flush()
+        
+    return res
+        
 def parseModel(lines):
+    data = OneOrMore(nestedExpr()).parseString("\n".join(lines))[0]
+    assert data[0] == 'model'
     atoms = Atom.getInstances()
-    for i in range(0, len(lines), 2):
-        match = parseModel.regexId.match(lines[i])
-        if match:
-            atom = atoms[int(match.group(1))]
-            atom.setModel(lines[i+1].strip()[:-1])
-parseModel.regexId = re.compile(".* x(\\d+) .*")
+    for d in data[1:]:
+        assert d[0] == 'define-fun'
+        if d[1][0] != 'x': continue
+        atom = atoms[int(d[1][1:])]
+        atom.setModel(d[4])
 
 def parseDegree(value):
-    matchReal = parseDegree.regexReal.match(value)
-    if matchReal:
-        degree = (matchReal.group(1),)
-    else:
-        matchFrac = parseDegree.regexFrac.match(value)
-        if matchFrac: degree = (matchFrac.group(1), matchFrac.group(2)) 
-        else:
-            print(value)
-            assert False
-    return degree
-parseDegree.regexReal = re.compile("\\s*(\\d+(?:\\.\\d+)?)\\s*")
-parseDegree.regexFrac = re.compile("\\s*\\(/\\s+(\\d+\\.\\d+)\\s+(\\d+\\.\\d+)\\)\\s*")
+    if type(value) is str: return (value,)
+    return (value[1], value[2])
 
 def printModel():
     printModel.count = printModel.count + 1
@@ -986,25 +954,14 @@ if __name__ == "__main__":
     for rule in Rule.instances:
         rule.notifyHeadAtoms()
 
-    if simplify():
-        normalize()
-        stdout = solve() if args.optimize_definedness != 'maximize' else solve(["(maximize (+ %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]),)])
-    else:
-        stdout = ["unsat"]
+    normalize()
+    model = solve(theory) if args.optimize_definedness != 'maximize' else solve(theory, ["(maximize (+ %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]),)])
 
     assert len(stdout) > 0
-    if stdout[0] == "unsat":
+    if model is None:
         print("INCOHERENT")
-    elif stdout[0] == "unknown":
-        print("UNKNOWN")
     else:
-        assert stdout[0] == "sat"
-        for i in range(1, len(stdout)):
-            if stdout[i] == "(model ":
-                stdout = stdout[i+1:]
-                break
-        assert stdout
-        parseModel(stdout)
+        parseModel(model)
         printModel()
 
         
@@ -1021,13 +978,11 @@ if __name__ == "__main__":
                 addendum = [] #["(assert (>= (abs (- 0.5 %s)) (abs (- 0.5 %s))))" % (atom.houter(), atom.getModel()) for atom in Atom.getInstances()]
                 addendum.append("(assert (>= (+ %s) %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]), mid))
                 #addendum.append("(maximize (+ %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]),))
-                stdout = solve(addendum)
-                if stdout[0] == "unsat":
+                model = solve([], addendum)
+                if model is None:
                     ub = mid
                 else:
-                    assert stdout[0] == "sat"
-                    assert stdout[1] == "(model "
-                    parseModel(stdout[2:])
+                    parseModel(model)
                     printModel()
                     lb = computeDefinedness()
             print("possible improvement:", formatString % (ub-lb,), "(below the given --precision %s)" % (args.precision,))
