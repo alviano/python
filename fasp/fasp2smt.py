@@ -21,14 +21,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 VERSION = "0.4"
 
 import argparse
+from decimal import Decimal
+from fractions import Fraction
 import re
 import os
 from parser import parser
+from pyparsing import OneOrMore, nestedExpr
 import scc
 import subprocess
 import sys
 import tempfile
-from pyparsing import OneOrMore, nestedExpr
 
 args = None
 
@@ -45,8 +47,8 @@ def parseArguments():
     parser.add_argument('--print-grounder-output', action='store_true', help='print the output of the grounder')
     parser.add_argument('--print-smt-input', action='store_true', help='print the input of the SMT solver')
     parser.add_argument('--print-smt-output', action='store_true', help='print the output of the SMT solver')
-    parser.add_argument('-o', '--optimize-definedness', metavar='<strategy>', help='prefer more defined fuzzy answer sets; set optimization strategy: none (default), binary-search, maximize', default='none')
-    parser.add_argument('-p', '--precision', metavar='<epsilon>', type=float, help='precision required in definedness', default=0.0001)
+    parser.add_argument('-o', '--optimize-definedness', metavar='<strategy>', help='prefer more defined fuzzy answer sets; set optimization strategy: none (default), maximize, binary-search, progression, any', default='none')
+    parser.add_argument('-p', '--precision', metavar='<epsilon>', type=float, help='precision required in definedness', default=0.01)
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="input files, and arguments for <grounder>")
     args = parser.parse_args()
     
@@ -880,11 +882,12 @@ def printModel():
 printModel.count = 0
 
 def computeDefinedness():
-    sum = 0.0
+    sum = Fraction(0)
     for atom in Atom.getInstances():
         degree = parseDegree(atom.getModel())
-        degree = float(degree[0]) if len(degree) == 1 else float(degree[0])/float(degree[1])
-        sum = sum + abs(.5 - degree)
+        #degree = float(degree[0]) if len(degree) == 1 else float(degree[0])/float(degree[1])
+        #sum = sum + abs(.5 - degree)
+        sum = sum + abs(Fraction(1,2) - Fraction(Decimal(degree[0])) / Fraction(Decimal(1) if len(degree) == 1 else Decimal(degree[1])))
     return sum
 
 if __name__ == "__main__":
@@ -955,7 +958,9 @@ if __name__ == "__main__":
         rule.notifyHeadAtoms()
 
     normalize()
-    model = solve(theory) if args.optimize_definedness != 'maximize' else solve(theory, ["(maximize (+ %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]),)])
+    if args.optimize_definedness == 'maximize':
+        theory.append("(maximize (+ %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]),))
+    model = solve(theory)
 
     assert len(stdout) > 0
     if model is None:
@@ -965,25 +970,34 @@ if __name__ == "__main__":
         printModel()
 
         
-        if args.optimize_definedness == 'binary-search':
+        if args.optimize_definedness in ['binary-search', 'progression', 'any']:
             precisionOrder = 1
             while 10**(-precisionOrder) >= args.precision: precisionOrder = precisionOrder + 1
             formatString = "%%.%df" % (precisionOrder, )
             
             lb = computeDefinedness()
             ub = len(Atom.getInstances()) * .5
+            pr = args.precision
             while ub - lb > args.precision:
-                print("possible improvement:", formatString % (ub-lb,))
-                mid = (lb+ub) / 2
-                addendum = [] #["(assert (>= (abs (- 0.5 %s)) (abs (- 0.5 %s))))" % (atom.houter(), atom.getModel()) for atom in Atom.getInstances()]
+                print("possible improvement:", formatString % (ub-lb,), "[%s,%s]" % (formatString % (lb,), formatString % (ub,)))
+                if args.optimize_definedness == 'binary-search':
+                    mid = (lb+ub) / 2
+                elif args.optimize_definedness == 'progression':
+                    mid = lb + pr
+                    pr = pr * 2
+                elif args.optimize_definedness == 'any':
+                    mid = lb + args.precision
+                else:
+                    assert False
+                addendum = []
                 addendum.append("(assert (>= (+ %s) %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]), mid))
-                #addendum.append("(maximize (+ %s))" % (" ".join(["(abs (- 0.5 %s))" % (atom.houter()) for atom in Atom.getInstances()]),))
                 model = solve([], addendum)
                 if model is None:
                     ub = mid
+                    pr = args.precision
                 else:
                     parseModel(model)
                     printModel()
                     lb = computeDefinedness()
-            print("possible improvement:", formatString % (ub-lb,), "(below the given --precision %s)" % (args.precision,))
+            print("possible improvement:", formatString % (ub-lb,), "[%s,%s]" % (formatString % (lb,), formatString % (ub,)), "(below the given --precision %s)" % (args.precision,))
         
