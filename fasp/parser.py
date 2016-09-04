@@ -89,7 +89,10 @@ def p_empty(p):
 
 def p_rule(p):
     '''rule : head IF body DOT'''
-    p[0] = "rule(%s, %s) :- %s." % (p[1], p[3][0], ", ".join(p[3][1]))
+    if p[3][1]: 
+        p[0] = "rule(%s, %s) :- %s." % (p[1], p[3][0], ", ".join(p[3][1]))
+    else:
+        p[0] = "rule(%s, %s)." % (p[1], p[3][0])
 
 def p_fact(p):
     '''rule : head DOT
@@ -98,7 +101,10 @@ def p_fact(p):
 
 def p_constraint(p):
     '''rule : IF body DOT'''
-    p[0] = "rule(0, %s) :- %s." % (p[2][0], ", ".join(p[2][1]))
+    if p[2][1]:
+        p[0] = "rule(0, %s) :- %s." % (p[2][0], ", ".join(p[2][1]))
+    else:
+        p[0] = "rule(0, %s)." % (p[2][0],)
 
 def p_head(p):
     '''head : atom'''
