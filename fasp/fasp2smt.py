@@ -976,13 +976,14 @@ if __name__ == "__main__":
             formatString = "%%.%df" % (precisionOrder, )
             
             lb = computeDefinedness()
-            ub = len(Atom.getInstances()) * .5
+            ub = len(Atom.getInstances()) * .5 + args.precision
             pr = args.precision
             while ub - lb > args.precision:
                 print("possible improvement:", formatString % (ub-lb,), "[%s,%s]" % (formatString % (lb,), formatString % (ub,)))
                 if args.optimize_definedness == 'binary-search':
                     mid = (lb+ub) / 2
                 elif args.optimize_definedness == 'progression':
+                    if lb + pr >= ub: pr = args.precision
                     mid = lb + pr
                     pr = pr * 2
                 elif args.optimize_definedness == 'any':
@@ -994,7 +995,6 @@ if __name__ == "__main__":
                 model = solve([], addendum)
                 if model is None:
                     ub = mid
-                    pr = args.precision
                 else:
                     parseModel(model)
                     printModel()
