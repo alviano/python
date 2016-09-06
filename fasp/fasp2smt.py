@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.4"
+VERSION = "0.5"
 
 import argparse
 from decimal import Decimal
@@ -51,7 +51,9 @@ def parseArguments():
     parser.add_argument('-p', '--precision', metavar='<epsilon>', type=float, help='precision required in definedness', default=0.01)
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="input files, and arguments for <grounder>")
     args = parser.parse_args()
-    
+
+    assert args.optimize_definedness in ['none (default)', 'maximize', 'binary-search', 'progression', 'any']
+
     args.files = []
     args.grounder_args = []
     for arg in args.args:
@@ -980,6 +982,8 @@ if __name__ == "__main__":
             pr = args.precision
             while ub - lb > args.precision:
                 print("possible improvement:", formatString % (ub-lb,), "[%s,%s]" % (formatString % (lb,), formatString % (ub,)))
+                sys.stdout.flush()
+                
                 if args.optimize_definedness == 'binary-search':
                     mid = (lb+ub) / 2
                 elif args.optimize_definedness == 'progression':
@@ -1000,4 +1004,4 @@ if __name__ == "__main__":
                     printModel()
                     lb = computeDefinedness()
             print("possible improvement:", formatString % (ub-lb,), "[%s,%s]" % (formatString % (lb,), formatString % (ub,)), "(below the given --precision %s)" % (args.precision,))
-        
+            sys.stdout.flush()
