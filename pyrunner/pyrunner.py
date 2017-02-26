@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 import argparse
 import fileinput
@@ -44,6 +44,7 @@ def parseArguments(runner):
     parser.add_argument('-o', '--output', metavar='<output>', type=str, choices=['text', 'xml'], default='text', help='output format (text or xml; default is text)')
     parser.add_argument('-d', '--output-directory', metavar='<output-directory>', type=str, default='.', help='directory for storing output files (default is .)')
     parser.add_argument('-f', '--fix-xml', metavar='<filename>', type=str, help="fix unclosed tags in xml file (and exit)")
+    parser.add_argument('-s', '--split-xml', metavar='<filename,count>', type=str, help="split the passed file into blocks of 'count' elements (and exit)")
     args = parser.parse_args()
     
     if args.run != None:
@@ -59,6 +60,14 @@ def parseArguments(runner):
         runner.outputDirectory = args.output_directory
     if args.fix_xml != None:
         runner.fixXml(args.fix_xml)
+    if args.split_xml != None:
+        arg = args.split_xml.split(',')
+        if len(arg) != 2: sys.exit("Please, provide extactly two (comma separated) arguments to --split-xml.")
+        try:
+            arg[1] = int(arg[1])
+        except ValueError:
+            sys.exit("Second argument of --split-xml must be an integer: %s" % (arg[1],))
+        runner.splitXml(arg[0], arg[1])
         
     if args.output_directory == None:
         print("pyrunner.py: error:  the following arguments are required: -r/--run (or use -f/--fix-xml)")
@@ -234,6 +243,42 @@ class Runner:
         while tags:
             print("</%s>" % tags.pop())    
             
+        exit(0)
+
+    def splitXml(self, filename, count):
+        c = 0
+        n = 0
+        f = None
+        b = None
+
+        tags = []
+        for line in fileinput.input(filename):
+            if line.startswith('<pyrunner>'): pass
+            elif line.startswith('</pyrunner>'): pass
+            elif line.startswith('<benchmark '): b = line
+            elif line.startswith('</benchmark>'): b = None
+            elif line.startswith('<testcase '):
+                if f is None:
+                    n += 1
+                    f = open('%s.split.%d.xml' % (filename, n), 'w')
+                    f.write('<pyrunner>\n')
+                    assert b is not None
+                    f.write(b)
+                f.write(line)
+                c += 1
+            elif line.startswith('</testcase>'):
+                assert f is not None
+                f.write(line)
+                if c == count:
+                    f.write('</benchmark>\n')
+                    f.write('</pyrunner>\n')
+                    f.close()
+                    f = None
+                    c = 0
+            else:
+                assert f is not None
+                f.write(line)
+        assert f is None
         exit(0)
 
 if __name__ == "__main__":
