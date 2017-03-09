@@ -493,17 +493,65 @@ def SE_ID():
     solver.stdin.close()
     SE(solver)
 
+def isStable(e):
+    for a in arg[1:]:
+        if a in e: continue
+        if a not in attR: continue
+        ok = False
+        for b in attR[a]:
+            if b in e:
+                ok = True
+                break
+        if not ok: return False
+    return True
+
+# GR is contained in the intersection of PR, and ST is a subset of PR.
+# Hence, we first compute GR, then force truth of GR and enumerate PR.
+# For each extension in PR, stability is checked.
 def D3():
+    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    GR(solver.stdin)
+    solver.stdin.close()
+    gr = None
+    while True:
+        line = solver.stdout.readline()
+        if not line: break
+        line = line.decode().strip().split()
+        if line[0] == 'v': gr = line[1:]
+    
+    assert gr is not None
     print('[', end='')
-    SE_GR(end='')
-    print(']', end='')
+    printModel(gr)
+    print('],', end='')
+    sys.stdout.flush()
+
+    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    PR(solver.stdin)
+    for a in gr: solver.stdin.write((str(argName[a]) + ' 0\n').encode())
+    solver.stdin.close()
+    print('[', end='')
+    count = 0
+    pr = []
+    while True:
+        line = solver.stdout.readline()
+        if not line: break
+        line = line.decode().strip().split()
+        if line[0] == 'v':
+            pr.append(line[1:])
+            if isStable(line[1:]):
+                if count != 0: print(',', end='')
+                count += 1
+                printModel(line[1:])
+    print('],', end='')
     sys.stdout.flush()
     
-    EE_ST(end=',')
-    sys.stdout.flush()
-    
-    EE_PR()
-    sys.stdout.flush()
+    print('[', end='')
+    count = 0
+    for m in pr:
+        if count != 0: print(',', end='')
+        count += 1
+        print('[' + ','.join(m) + ']', end='')
+    print(']')
 
 problemFunctions = {
     "DC-CO" : DC_CO, "DS-CO" : DS_CO, "SE-CO" : SE_CO, "EE-CO" : EE_CO,
