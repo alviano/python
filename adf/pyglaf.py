@@ -23,6 +23,7 @@ VERSION = "0.1"
 import argparse
 import fileinput
 import re
+import os
 import subprocess
 import sys
 import tempfile
@@ -82,7 +83,7 @@ parseAPX.re_atom = re.compile('(?P<predicate>\w+)\((?P<args>[\w,]+)\)\.')
 
 parseFunctions = {"tgf" : parseTGF, "apx" : parseAPX}
 
-sol = '/home/malvi/workspaces/codelite/aspino/build/release/aspino'
+sol = None
 
 def printModel(m):
     print('[', end='')
@@ -357,7 +358,8 @@ def EE_ST(end='\n'):
     EE(solver, end=end)
 
 # The argument to be checked cannot be assumed true in counter-extensions, 
-# so we are going to enumerate SST and check whether argument a is in some extension
+# so we are going to enumerate SST and check whether argument a is in some extension.
+# This is a naive approach, but the alternative would be to implement a second level procedure.
 def DC_SST(a):
     solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
@@ -425,73 +427,81 @@ def SE_GR(end='\n'):
     solver.stdin.close()
     SE(solver, end=end)
 
-def DC_ID(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    PR(solver.stdin)
-    solver.stdin.close()
-
-    target = a
-
-    # compute the intersection of PR (naively)
-    counter = {a : 0 for a in arg}
-    count = 0
+def computeUnionOfAdmissibleSets():
+    union = set()
     while True:
-        line = solver.stdout.readline()
-        if not line: break
-        line = line.decode().strip().split()
-        if line[0] == 'v':
-            count += 1
-            for a in line[1:]: counter[a] += 1
+        solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        solver.stdin.write('p ccnf +\n'.encode())
+        solver.stdin.write(('o ' + ' '.join([str(i) for i in range(1, len(arg)) if arg[i] not in union]) + ' 0\n').encode())
+        nameTable(solver.stdin)
+        conflictFree(solver.stdin)
+        buildAttacked(solver.stdin)
+        admissible(solver.stdin)
+        solver.stdin.close()
+        stop = True
+        while True:
+            line = solver.stdout.readline()
+            if not line: break
+            line = line.decode().strip().split()
+            if line[0] == 'v': 
+                for a in line[1:]:
+                    if a in union: continue
+                    union.add(a)
+                    stop = False
+        if stop: break
+    return union
+
+def computeAttackedBy(union):
+    attacked = set()
+    for a in arg[1:]:
+        # we are only interested to arguments in the union
+        if a not in union:
+            attacked.add(a)
+            continue
             
-            # check if target is still in PR
-            if counter[target] != count:
-                print('NO')
-                return
+        if a not in attR: continue
+        for b in attR[a]:
+            if b not in union: continue
+            attacked.add(a)
+            break
+    return attacked
+
+def DC_ID(query_arg):
+    union = computeUnionOfAdmissibleSets()
+    attacked = computeAttackedBy(union)
+    if query_arg in attacked:
+        print('NO')
+        return
     
-    # force falsity of atoms not in PR and maximize over admissible extensions
+    # find maximal admissible set that is not attacked by the union
     solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     solver.stdin.write('p ccnf +\n'.encode())
-    solver.stdin.write(('o ' + ' '.join([str(i) for i in range(1, len(arg)) if counter[arg[i]] == count]) + ' 0\n').encode())
+    solver.stdin.write(('o ' + ' '.join([str(argName[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
     conflictFree(solver.stdin)
     buildAttacked(solver.stdin)
     admissible(solver.stdin)
-    for i in range(1, len(arg)):
-        if counter[arg[i]] < count: solver.stdin.write((str(-i) + ' 0\n').encode())
-    
-    # we cannot add the target as false because we are maximizing; however, since ID is unique, we can force the truth of the target
-    credulous(solver.stdin, target)
+    for a in attacked: solver.stdin.write((str(-argName[a]) + ' 0\n').encode())
+    credulous(solver.stdin, query_arg)
     solver.stdin.close()
-    DC(solver)
+    DC(solver)        
 
 def SE_ID():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    PR(solver.stdin)
-    solver.stdin.close()
-
-    # compute the intersection of PR (naively)
-    counter = {a : 0 for a in arg}
-    count = 0
-    while True:
-        line = solver.stdout.readline()
-        if not line: break
-        line = line.decode().strip().split()
-        if line[0] == 'v':
-            count += 1
-            for a in line[1:]: counter[a] += 1
+    union = computeUnionOfAdmissibleSets()
+    attacked = computeAttackedBy(union)
     
-    # force falsity of atoms not in PR and maximize over admissible extensions
+    # find maximal admissible set that is not attacked by the union
     solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     solver.stdin.write('p ccnf +\n'.encode())
-    solver.stdin.write(('o ' + ' '.join([str(i) for i in range(1, len(arg)) if counter[arg[i]] == count]) + ' 0\n').encode())
+    solver.stdin.write(('o ' + ' '.join([str(argName[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
     conflictFree(solver.stdin)
     buildAttacked(solver.stdin)
     admissible(solver.stdin)
-    for i in range(1, len(arg)):
-        if counter[arg[i]] < count: solver.stdin.write((str(-i) + ' 0\n').encode())
+    for a in attacked: solver.stdin.write((str(-argName[a]) + ' 0\n').encode())
     solver.stdin.close()
-    SE(solver)
+    SE(solver)        
+
 
 def isStable(e):
     for a in arg[1:]:
@@ -576,6 +586,7 @@ def parseArguments():
     parser.add_argument('-f', metavar='<file>', type=str, help='')
     parser.add_argument('-fo', metavar='<fileformat>', type=str, help='')
     parser.add_argument('-a', metavar='<additional_parameter>', type=str, help='')
+    parser.add_argument('--circ', metavar='<file>', type=str, help='path to circumscriptino')
     args = parser.parse_args()
     if args.formats: 
         print('[%s]' % ','.join(sorted(parseFunctions.keys())))
@@ -583,10 +594,8 @@ def parseArguments():
     if args.problems:
         print('[%s]' % ','.join(sorted(problemFunctions.keys())))
         sys.exit()
+    if not args.circ: args.circ = os.path.dirname(os.path.realpath(__file__)) + '/aspino'
     return args
-
-
-    
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
@@ -594,6 +603,10 @@ if __name__ == "__main__":
         print("Mario Alviano")
         sys.exit()
     args = parseArguments()
+    
+    sol = args.circ
+    if not os.path.isfile(sol): sys.exit("Please, specify a valid path to circumscriptino. File '" + sol + "' does not exist.")
+    if not os.access(sol, os.X_OK): sys.exit("Please, specify a valid path to circumscriptino. File '" + sol + "' is not executable.")
     
     if args.fo is None: sys.exit("Please, specify a format.")
     if args.p is None: sys.exit("Please, specify a problem.")
