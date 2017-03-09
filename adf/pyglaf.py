@@ -279,33 +279,33 @@ def CAT(a):
     return
 
 def DC_CO(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
     credulous(solver.stdin, a)
     solver.stdin.close()
     DC(solver)
 
 def DS_CO(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
     skeptical(solver.stdin, a)
     solver.stdin.close()
     DS(solver)
 
 def SE_CO():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
     solver.stdin.close()
     SE(solver)
 
 def EE_CO():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
     solver.stdin.close()
     EE(solver)
 
 def DC_PR(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
     credulous(solver.stdin, a)
     solver.stdin.close()
@@ -314,45 +314,45 @@ def DC_PR(a):
 # The argument to be checked cannot be assumed false in counter-extensions, 
 # so we are going to enumerate PR and check whether argument a is in all extensions
 def DS_PR(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
     solver.stdin.close()
     DS_via_EE(solver, a)
 
 def SE_PR():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
     solver.stdin.close()
     SE(solver)
     
 def EE_PR(end='\n'):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
     solver.stdin.close()
     EE(solver, end=end)
 
 def DC_ST(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
     credulous(solver.stdin, a)
     solver.stdin.close()
     DC(solver)
 
 def DS_ST(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
     skeptical(solver.stdin, a)
     solver.stdin.close()
     DS(solver)
 
 def SE_ST():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
     solver.stdin.close()
     SE(solver)
 
 def EE_ST(end='\n'):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
     solver.stdin.close()
     EE(solver, end=end)
@@ -361,7 +361,7 @@ def EE_ST(end='\n'):
 # so we are going to enumerate SST and check whether argument a is in some extension.
 # This is a naive approach, but the alternative would be to implement a second level procedure.
 def DC_SST(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
     solver.stdin.close()
     DC_via_EE(solver, a)
@@ -369,19 +369,19 @@ def DC_SST(a):
 # The argument to be checked cannot be assumed false in counter-extensions, 
 # so we are going to enumerate SST and check whether argument a is in all extensions
 def DS_SST(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
     solver.stdin.close()
     DS_via_EE(solver, a)
 
 def SE_SST():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
     solver.stdin.close()
     SE(solver)
 
 def EE_SST():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
     solver.stdin.close()
     EE(solver)
@@ -389,7 +389,7 @@ def EE_SST():
 # The argument to be checked cannot be assumed true in counter-extensions, 
 # so we are going to enumerate STG and check whether argument a is in some extension
 def DC_STG(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
     solver.stdin.close()
     DC_via_EE(solver, a)
@@ -397,32 +397,32 @@ def DC_STG(a):
 # The argument to be checked cannot be assumed false in counter-extensions, 
 # so we are going to enumerate STG and check whether argument a is in all extensions
 def DS_STG(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
     solver.stdin.close()
     DS_via_EE(solver, a)
 
 def SE_STG():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
     solver.stdin.close()
     SE(solver)
 
 def EE_STG():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
     solver.stdin.close()
     EE(solver)
 
 # Since GR is unique, let's compute it and check whether it contains argument a
 def DC_GR(a):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     GR(solver.stdin)
     solver.stdin.close()
     DC_via_SE(solver, a)
 
 def SE_GR(end='\n'):
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     GR(solver.stdin)
     solver.stdin.close()
     SE(solver, end=end)
@@ -430,7 +430,7 @@ def SE_GR(end='\n'):
 def computeUnionOfAdmissibleSets():
     union = set()
     while True:
-        solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         solver.stdin.write('p ccnf +\n'.encode())
         solver.stdin.write(('o ' + ' '.join([str(i) for i in range(1, len(arg)) if arg[i] not in union]) + ' 0\n').encode())
         nameTable(solver.stdin)
@@ -474,7 +474,7 @@ def DC_ID(query_arg):
         return
     
     # find maximal admissible set that is not attacked by the union
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     solver.stdin.write('p ccnf +\n'.encode())
     solver.stdin.write(('o ' + ' '.join([str(argName[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
@@ -491,7 +491,7 @@ def SE_ID():
     attacked = computeAttackedBy(union)
     
     # find maximal admissible set that is not attacked by the union
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     solver.stdin.write('p ccnf +\n'.encode())
     solver.stdin.write(('o ' + ' '.join([str(argName[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
@@ -519,7 +519,7 @@ def isStable(e):
 # Hence, we first compute GR, then force truth of GR and enumerate PR.
 # For each extension in PR, stability is checked.
 def D3():
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     GR(solver.stdin)
     solver.stdin.close()
     gr = None
@@ -535,7 +535,7 @@ def D3():
     print('],', end='')
     sys.stdout.flush()
 
-    solver = subprocess.Popen([sol, '--mode=circumscription', '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
     for a in gr: solver.stdin.write((str(argName[a]) + ' 0\n').encode())
     solver.stdin.close()
@@ -594,7 +594,7 @@ def parseArguments():
     if args.problems:
         print('[%s]' % ','.join(sorted(problemFunctions.keys())))
         sys.exit()
-    if not args.circ: args.circ = os.path.dirname(os.path.realpath(__file__)) + '/aspino'
+    if not args.circ: args.circ = os.path.dirname(os.path.realpath(__file__)) + '/circumscriptino-static'
     return args
 
 if __name__ == "__main__":
