@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.1"
+VERSION = "0.2"
 
 import argparse
 import fileinput
@@ -29,26 +29,27 @@ import sys
 import tempfile
 
 arg = [None]
-argName = {}
+argToIdx = {}
 att = {}
 attR = {}
 
 def attacked(b):
-    return len(arg)-1 + argName[b]
+    return len(arg)-1 + argToIdx[b]
 
 def inRange(b):
-    return 2*(len(arg)-1) + argName[b]
+    return 2*(len(arg)-1) + argToIdx[b]
 
 def parseTGF(filename):
     sharp = False
     for line in fileinput.input(filename):
         line = line.strip()
+        if not line: continue
         if line == '#':
             sharp = True
         elif not sharp:
             name = line
-            if name not in argName:
-                argName[name] = len(arg)
+            if name not in argToIdx:
+                argToIdx[name] = len(arg)
                 arg.append(name)
         else:
             (a, b) = line.split()
@@ -68,8 +69,8 @@ def parseAPX(filename):
         pred = res.group('predicate')
         if pred == 'arg':
             name = res.group('args')
-            if name not in argName:
-                argName[name] = len(arg)
+            if name not in argToIdx:
+                argToIdx[name] = len(arg)
                 arg.append(name)
         elif pred == 'att':
             (a, b) = res.group('args').split(',')
@@ -163,25 +164,25 @@ def DS_via_EE(solver, a):
 def conflictFree(stream):
     for a in att:
         for b in att[a]:
-            stream.write(("%d %d 0\n" % (-argName[a], -argName[b])).encode())
+            stream.write(("%d %d 0\n" % (-argToIdx[a], -argToIdx[b])).encode())
 
 def buildAttacked(stream):
     for b in arg[1:]:
         cl = [str(-attacked(b))]
         if b in attR:
             for c in attR[b]:
-                cl.append(str(argName[c]))
-                stream.write(("%d %d 0\n" % (-argName[c], attacked(b))).encode())
+                cl.append(str(argToIdx[c]))
+                stream.write(("%d %d 0\n" % (-argToIdx[c], attacked(b))).encode())
         stream.write((' '.join(cl) + ' 0\n').encode())
 
 def admissible(stream):
     for b in att:
         for a in att[b]:
-            stream.write(("%d %d 0\n" % (-argName[a], attacked(b))).encode())
+            stream.write(("%d %d 0\n" % (-argToIdx[a], attacked(b))).encode())
 
 def complete(stream):
     for a in arg[1:]:
-        cl = [str(argName[a])]
+        cl = [str(argToIdx[a])]
         if a in attR:
             for b in attR[a]:
                 cl.append(str(-attacked(b)))
@@ -189,25 +190,25 @@ def complete(stream):
 
 def stable(stream):
     for a in arg[1:]:
-        cl = [str(argName[a])]
+        cl = [str(argToIdx[a])]
         if a in attR:
             for b in attR[a]:
-                cl.append(str(argName[b]))
+                cl.append(str(argToIdx[b]))
         stream.write((' '.join(cl) + ' 0\n').encode())
 
 def buildRange(stream):
     for a in arg[1:]:
-        cl = [str(-inRange(a)), str(argName[a])]
+        cl = [str(-inRange(a)), str(argToIdx[a])]
         if a in attR:
             for b in attR[a]:
-                cl.append(str(argName[b]))
+                cl.append(str(argToIdx[b]))
         stream.write((' '.join(cl) + ' 0\n').encode())
 
 def credulous(stream, a):
-    stream.write(("%d 0\n" % (argName[a],)).encode())
+    stream.write(("%d 0\n" % (argToIdx[a],)).encode())
 
 def skeptical(stream, a):
-    stream.write(("-%d 0\n" % (argName[a],)).encode())
+    stream.write(("-%d 0\n" % (argToIdx[a],)).encode())
 
 def nameTable(stream):
     for i in range(1, len(arg)):
@@ -476,12 +477,12 @@ def DC_ID(query_arg):
     # find maximal admissible set that is not attacked by the union
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     solver.stdin.write('p ccnf +\n'.encode())
-    solver.stdin.write(('o ' + ' '.join([str(argName[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
+    solver.stdin.write(('o ' + ' '.join([str(argToIdx[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
     conflictFree(solver.stdin)
     buildAttacked(solver.stdin)
     admissible(solver.stdin)
-    for a in attacked: solver.stdin.write((str(-argName[a]) + ' 0\n').encode())
+    for a in attacked: solver.stdin.write((str(-argToIdx[a]) + ' 0\n').encode())
     credulous(solver.stdin, query_arg)
     solver.stdin.close()
     DC(solver)        
@@ -489,16 +490,18 @@ def DC_ID(query_arg):
 def SE_ID():
     union = computeUnionOfAdmissibleSets()
     attacked = computeAttackedBy(union)
+    print(union)
+    print(attacked)
     
     # find maximal admissible set that is not attacked by the union
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     solver.stdin.write('p ccnf +\n'.encode())
-    solver.stdin.write(('o ' + ' '.join([str(argName[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
+    solver.stdin.write(('o ' + ' '.join([str(argToIdx[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
     conflictFree(solver.stdin)
     buildAttacked(solver.stdin)
     admissible(solver.stdin)
-    for a in attacked: solver.stdin.write((str(-argName[a]) + ' 0\n').encode())
+    for a in attacked: solver.stdin.write((str(-argToIdx[a]) + ' 0\n').encode())
     solver.stdin.close()
     SE(solver)        
 
@@ -537,7 +540,7 @@ def D3():
 
     solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
-    for a in gr: solver.stdin.write((str(argName[a]) + ' 0\n').encode())
+    for a in gr: solver.stdin.write((str(argToIdx[a]) + ' 0\n').encode())
     solver.stdin.close()
     print('[', end='')
     count = 0
@@ -586,7 +589,7 @@ def parseArguments():
     parser.add_argument('-f', metavar='<file>', type=str, help='')
     parser.add_argument('-fo', metavar='<fileformat>', type=str, help='')
     parser.add_argument('-a', metavar='<additional_parameter>', type=str, help='')
-    parser.add_argument('--circ', metavar='<file>', type=str, help='path to circumscriptino')
+    parser.add_argument('--circ', metavar='<file>', type=str, help='path to circumscriptino (default is circumscriptino-static in the script directory)')
     args = parser.parse_args()
     if args.formats: 
         print('[%s]' % ','.join(sorted(parseFunctions.keys())))
@@ -599,7 +602,7 @@ def parseArguments():
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        print("af.py", VERSION)
+        print(sys.argv[0], VERSION)
         print("Mario Alviano")
         sys.exit()
     args = parseArguments()
