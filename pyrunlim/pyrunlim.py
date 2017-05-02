@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.14"
+VERSION = "2.15"
 
 import argparse
 import psutil
@@ -394,7 +394,7 @@ class Process:
             else:
                 self.stderrFile = self.stdoutFile
 
-        self.process = psutil.Popen(["bash", "-c", "(%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.process = psutil.Popen(["bash", "-c", "trap '' SIGINT SIGTERM; (%s)" % (" ".join(self.args),)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.process.nice(self.nice)
         self.process.cpu_affinity(self.affinity)
         
