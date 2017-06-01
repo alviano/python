@@ -52,7 +52,7 @@ def parseArguments():
     parser.add_argument('args', metavar="...", nargs=argparse.REMAINDER, help="input files, and arguments for <grounder>")
     args = parser.parse_args()
 
-    assert args.optimize_definedness in ['none (default)', 'maximize', 'binary-search', 'progression', 'any']
+    assert args.optimize_definedness in ['none', 'maximize', 'binary-search', 'progression', 'any']
 
     args.files = []
     args.grounder_args = []
