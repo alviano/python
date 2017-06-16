@@ -18,12 +18,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.15"
+VERSION = "2.16"
 
 import argparse
 import psutil
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -438,7 +439,7 @@ class Process:
     def _wait(self):
         self.result = self.process.wait()
         
-    def _kill(self):
+    def kill(self):
         try:
             subprocesses = self.process.children(recursive=True)
         except psutil.NoSuchProcess:
@@ -506,23 +507,27 @@ class Process:
         if self.real > self.realtimelimit:
             self.status = "out of time (real)"
             self.exit_code = 1
-            self._kill()
+            self.kill()
         elif self.user + self.system > self.timelimit:
             self.status = "out of time"
             self.exit_code = 2
-            self._kill()
+            self.kill()
         elif self.max_memory > self.memorylimit:
             self.status = "out of memory"
             self.exit_code = 3
-            self._kill()
+            self.kill()
         elif self.swap > self.swaplimit:
             self.status = "out of memory (swap)"
             self.exit_code = 4
-            self._kill()
+            self.kill()
             
 if __name__ == "__main__":
     process = Process()
     parseArguments(process)
+    
+    def signal_handler(signal, frame):
+        process.kill()
+    signal.signal(signal.SIGINT, signal_handler)
     
     process.run()
     
