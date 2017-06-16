@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "1.3"
+VERSION = "1.4"
 
 import argparse
 import fileinput
@@ -254,7 +254,11 @@ class Runner:
         tags = []
         for line in fileinput.input(filename):
             if line.startswith('<pyrunner>'): pass
-            elif line.startswith('</pyrunner>'): pass
+            elif line.startswith('</pyrunner>'):
+                f.write('</benchmark>\n')
+                f.write('</pyrunner>\n')
+                f.close()
+                f = None
             elif line.startswith('<benchmark '): b = line
             elif line.startswith('</benchmark>'): b = None
             elif line.startswith('<testcase '):
