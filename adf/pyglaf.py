@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.2"
+VERSION = "0.3"
 
 import argparse
 import fileinput
@@ -92,29 +92,31 @@ def printModel(m):
     print(']', end='')
     sys.stdout.flush()
 
+def printAll(solver, end='\n'):
+    while True:
+        line = solver.stdout.readline()
+        if not line: break
+        print(line.decode().strip(), end=end)
+
 def DS(solver):
     while True:
         line = solver.stdout.readline()
         if not line: break
-        line = line.decode().strip().split()
-        if line[0] == 'v': print('NO')
-        elif line[0] == 'UNSATISFIABLE': print('YES')
+        print(line.decode().strip())
 
 def DC(solver):
     while True:
         line = solver.stdout.readline()
         if not line: break
-        line = line.decode().strip().split()
-        if line[0] == 'v': print('YES')
-        elif line[0] == 'UNSATISFIABLE': print('NO')
+        print(line.decode().strip())
 
 def SE(solver, end='\n'):
     while True:
         line = solver.stdout.readline()
         if not line: break
         line = line.decode().strip().split()
-        if line[0] == 'v': printModel(line[1:])
-        elif line[0] == 'UNSATISFIABLE': print('NO', end='')
+        if line[0] == 'UNSATISFIABLE': print('NO', end=''); return
+        printModel(line)
     print(end=end)
 
 def EE(solver, end='\n'):
@@ -205,28 +207,74 @@ def buildRange(stream):
         stream.write((' '.join(cl) + ' 0\n').encode())
 
 def credulous(stream, a):
-    stream.write(("%d 0\n" % (argToIdx[a],)).encode())
+    stream.write(("q %d\n" % (argToIdx[a],)).encode())
+    stream.write("v no ids\n".encode())
+    stream.write("v models none:NO\\n\n".encode())
+    stream.write("v models start:YES\\n\n".encode())
+    stream.write("v models end:\n".encode())
+    stream.write("v model start:\n".encode())
+    stream.write("v model sep:\n".encode())
+    stream.write("v model end:\n".encode())
+    stream.write("v lit start:\n".encode())
+    stream.write("v lit sep:\n".encode())
+    stream.write("v lit end:\n".encode())
 
 def skeptical(stream, a):
-    stream.write(("-%d 0\n" % (argToIdx[a],)).encode())
+    stream.write(("q -%d\n" % (argToIdx[a],)).encode())
+    stream.write("v no ids\n".encode())
+    stream.write("v models none:YES\\n\n".encode())
+    stream.write("v models start:NO\\n\n".encode())
+    stream.write("v models end:\n".encode())
+    stream.write("v model start:\n".encode())
+    stream.write("v model sep:\n".encode())
+    stream.write("v model end:\n".encode())
+    stream.write("v lit start:\n".encode())
+    stream.write("v lit sep:\n".encode())
+    stream.write("v lit end:\n".encode())
+
+def single(stream):
+    nameTable(stream)
+    stream.write("v no ids\n".encode())
+    stream.write("v models none:NO\\n\n".encode())
+    stream.write("v models start:\n".encode())
+    stream.write("v models end:\\n\n".encode())
+    stream.write("v model start:[\n".encode())
+    stream.write("v model sep:,\n".encode())
+    stream.write("v model end:]\n".encode())
+    stream.write("v lit start:\n".encode())
+    stream.write("v lit sep:,\n".encode())
+    stream.write("v lit end:\n".encode())
+    
+def enumerate(stream):
+    nameTable(stream)
+    stream.write("v no ids\n".encode())
+    stream.write("v models none:[]\\n\n".encode())
+    stream.write("v models start:[\n".encode())
+    stream.write("v models end:]\\n\n".encode())
+    stream.write("v model start:[\n".encode())
+    stream.write("v model sep:,\n".encode())
+    stream.write("v model end:]\n".encode())
+    stream.write("v lit start:\n".encode())
+    stream.write("v lit sep:,\n".encode())
+    stream.write("v lit end:\n".encode())
 
 def nameTable(stream):
     for i in range(1, len(arg)):
         stream.write(('v %d %s\n' % (i, arg[i])).encode())
 
+def preamble(stream, soft=[]):
+    stream.write('p circ\n'.encode())
+    for s in soft: stream.write(('w %d\n' % (s,)).encode())
+
 def CO(stream):
-    stream.write('p ccnf -\n'.encode())
-    stream.write('o 0\n'.encode())
-    nameTable(stream)
+    preamble(stream)
     conflictFree(stream)
     buildAttacked(stream)
     admissible(stream)
     complete(stream)
 
 def ST(stream):
-    stream.write('p ccnf -\n'.encode())
-    stream.write('o 0\n'.encode())
-    nameTable(stream)
+    preamble(stream)
     conflictFree(stream)
     buildAttacked(stream)
     admissible(stream)
@@ -234,27 +282,21 @@ def ST(stream):
     stable(stream)
 
 def PR(stream):
-    stream.write('p ccnf +\n'.encode())
-    stream.write(('o ' + ' '.join([str(i) for i in range(1, len(arg))]) + ' 0\n').encode())
-    nameTable(stream)
+    preamble(stream, range(1, len(arg)))
     conflictFree(stream)
     buildAttacked(stream)
     admissible(stream)
     complete(stream)
 
 def GR(stream):
-    stream.write('p ccnf -\n'.encode())
-    stream.write(('o ' + ' '.join([str(i) for i in range(1, len(arg))]) + ' 0\n').encode())
-    nameTable(stream)
+    preamble(stream, [-x for x in range(1, len(arg))])
     conflictFree(stream)
     buildAttacked(stream)
     admissible(stream)
     complete(stream)
 
 def SST(stream):
-    stream.write('p ccnf +\n'.encode())
-    stream.write(('o ' + ' '.join([str(inRange(i)) for i in arg[1:]]) + ' 0\n').encode())
-    nameTable(stream)
+    preamble(stream, [inRange(i) for i in arg[1:]])
     conflictFree(stream)
     buildAttacked(stream)
     admissible(stream)
@@ -262,177 +304,178 @@ def SST(stream):
     buildRange(stream)
 
 def STG(stream):
-    stream.write('p ccnf +\n'.encode())
-    stream.write(('o ' + ' '.join([str(inRange(i)) for i in arg[1:]]) + ' 0\n').encode())
-    nameTable(stream)
+    preamble(stream, [inRange(i) for i in arg[1:]])
     conflictFree(stream)
     buildRange(stream)
 
+def close(stream):
+    stream.write('n 0\n'.encode())
+    stream.close()
+
 def CAT(a):
-    solver = subprocess.Popen(["cat"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    SST(solver.stdin)
-    solver.stdin.close()
-    
-    while True:
-        line = solver.stdout.readline()
-        if not line: break
-        print(line.decode(), end="")
-    return
+    PR(sys.stdout.buffer)
+    skeptical(sys.stdout.buffer, a)
+    close(sys.stdout.buffer)
 
 def DC_CO(a):
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
     credulous(solver.stdin, a)
-    solver.stdin.close()
-    DC(solver)
+    close(solver.stdin)
+    printAll(solver)
 
 def DS_CO(a):
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
     skeptical(solver.stdin, a)
-    solver.stdin.close()
-    DS(solver)
+    close(solver.stdin)
+    printAll(solver)
 
 def SE_CO():
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
-    solver.stdin.close()
-    SE(solver)
+    single(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
 
 def EE_CO():
     solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     CO(solver.stdin)
-    solver.stdin.close()
-    EE(solver)
+    enumerate(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
 
 def DC_PR(a):
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
     credulous(solver.stdin, a)
-    solver.stdin.close()
-    DC(solver)
+    close(solver.stdin)
+    printAll(solver)
 
-# The argument to be checked cannot be assumed false in counter-extensions, 
-# so we are going to enumerate PR and check whether argument a is in all extensions
 def DS_PR(a):
-    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
-    solver.stdin.close()
-    DS_via_EE(solver, a)
+    skeptical(solver.stdin, a)
+    close(solver.stdin)
+    printAll(solver)
 
 def SE_PR():
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
-    solver.stdin.close()
-    SE(solver)
+    single(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
     
 def EE_PR(end='\n'):
     solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     PR(solver.stdin)
-    solver.stdin.close()
-    EE(solver, end=end)
+    enumerate(solver.stdin)
+    close(solver.stdin)
+    printAll(solver, end=end)
 
 def DC_ST(a):
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
     credulous(solver.stdin, a)
-    solver.stdin.close()
-    DC(solver)
+    close(solver.stdin)
+    printAll(solver)
 
 def DS_ST(a):
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
     skeptical(solver.stdin, a)
-    solver.stdin.close()
-    DS(solver)
+    close(solver.stdin)
+    printAll(solver)
 
 def SE_ST():
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
-    solver.stdin.close()
-    SE(solver)
+    single(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
 
 def EE_ST(end='\n'):
     solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     ST(solver.stdin)
-    solver.stdin.close()
-    EE(solver, end=end)
+    enumerate(solver.stdin)
+    close(solver.stdin)
+    printAll(solver, end=end)
 
-# The argument to be checked cannot be assumed true in counter-extensions, 
-# so we are going to enumerate SST and check whether argument a is in some extension.
-# This is a naive approach, but the alternative would be to implement a second level procedure.
 def DC_SST(a):
-    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
-    solver.stdin.close()
-    DC_via_EE(solver, a)
+    credulous(solver.stdin, a)
+    close(solver.stdin)
+    printAll(solver)
 
-# The argument to be checked cannot be assumed false in counter-extensions, 
-# so we are going to enumerate SST and check whether argument a is in all extensions
 def DS_SST(a):
-    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
-    solver.stdin.close()
-    DS_via_EE(solver, a)
+    skeptical(solver.stdin, a)
+    close(solver.stdin)
+    printAll(solver)
 
 def SE_SST():
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
-    solver.stdin.close()
-    SE(solver)
+    single(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
 
 def EE_SST():
     solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     SST(solver.stdin)
-    solver.stdin.close()
-    EE(solver)
+    enumerate(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
 
-# The argument to be checked cannot be assumed true in counter-extensions, 
-# so we are going to enumerate STG and check whether argument a is in some extension
 def DC_STG(a):
-    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
-    solver.stdin.close()
-    DC_via_EE(solver, a)
+    credulous(solver.stdin, a)
+    close(solver.stdin)
+    printAll(solver)
 
-# The argument to be checked cannot be assumed false in counter-extensions, 
-# so we are going to enumerate STG and check whether argument a is in all extensions
 def DS_STG(a):
-    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
-    solver.stdin.close()
-    DS_via_EE(solver, a)
+    skeptical(solver.stdin, a)
+    close(solver.stdin)
+    printAll(solver)
 
 def SE_STG():
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
-    solver.stdin.close()
-    SE(solver)
+    single(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
 
 def EE_STG():
     solver = subprocess.Popen([sol, '-n=0', '--circ-wit=0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     STG(solver.stdin)
-    solver.stdin.close()
-    EE(solver)
+    enumerate(solver.stdin)
+    close(solver.stdin)
+    printAll(solver)
 
-# Since GR is unique, let's compute it and check whether it contains argument a
 def DC_GR(a):
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     GR(solver.stdin)
-    solver.stdin.close()
-    DC_via_SE(solver, a)
+    credulous(solver.stdin, a)
+    close(solver.stdin)
+    printAll(solver)
 
 def SE_GR(end='\n'):
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     GR(solver.stdin)
-    solver.stdin.close()
-    SE(solver, end=end)
+    single(solver.stdin)
+    close(solver.stdin)
+    printAll(solver, end=end)
 
 def computeUnionOfAdmissibleSets():
     union = set()
     while True:
         solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        solver.stdin.write('p ccnf +\n'.encode())
+        solver.stdin.write('p circ\n'.encode())
         solver.stdin.write(('o ' + ' '.join([str(i) for i in range(1, len(arg)) if arg[i] not in union]) + ' 0\n').encode())
         nameTable(solver.stdin)
         conflictFree(solver.stdin)
@@ -476,7 +519,7 @@ def DC_ID(query_arg):
     
     # find maximal admissible set that is not attacked by the union
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    solver.stdin.write('p ccnf +\n'.encode())
+    solver.stdin.write('p circ\n'.encode())
     solver.stdin.write(('o ' + ' '.join([str(argToIdx[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
     conflictFree(solver.stdin)
@@ -495,7 +538,7 @@ def SE_ID():
     
     # find maximal admissible set that is not attacked by the union
     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    solver.stdin.write('p ccnf +\n'.encode())
+    solver.stdin.write('p circ\n'.encode())
     solver.stdin.write(('o ' + ' '.join([str(argToIdx[a]) for a in arg[1:] if a not in attacked]) + ' 0\n').encode())
     nameTable(solver.stdin)
     conflictFree(solver.stdin)
@@ -574,7 +617,7 @@ problemFunctions = {
     "DC-STG" : DC_STG, "DS-STG" : DS_STG, "SE-STG" : SE_STG, "EE-STG" : EE_STG,
     "DC-GR" : DC_GR, "SE-GR" : SE_GR,
     "DC-ID" : DC_ID, "SE-ID" : SE_ID,
-    "D3": D3  #, "CAT": CAT
+    "D3": D3  , "CAT": CAT
 }
 
 

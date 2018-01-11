@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "1.4"
+VERSION = "1.5"
 
 import argparse
 import fileinput
@@ -142,7 +142,7 @@ class Runner:
 
     def executeAndSplit(self, command):
         global dirname
-        lines = subprocess.check_output(["bash", "-c", command.replace("$DIRNAME", dirname)])
+        lines = subprocess.check_output(["bash", "-c", "PYTHONHASHSEED=0 " + command.replace("$DIRNAME", dirname)])
         return lines.decode().strip().split("\n")
 
     def addCommand(self, command):
