@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "2.17"
+VERSION = "2.18"
 
 import argparse
 import psutil
@@ -452,7 +452,7 @@ class Process:
             except psutil.NoSuchProcess:
                 pass
 
-        gone, alive = psutil.wait_procs(subprocesses, timeout=1)
+        gone, alive = psutil.wait_procs(subprocesses, timeout=10)
         for p in alive:
             try:
                 p.kill()
