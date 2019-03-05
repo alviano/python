@@ -2,7 +2,7 @@
 
 GPL = """
 AF solver.
-Copyright (C) 2017-2018  Mario Alviano (mario@alviano.net)
+Copyright (C) 2017-2019  Mario Alviano (mario@alviano.net)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -265,11 +265,11 @@ def enumerate(stream):
     nameTable(stream)
     stream.write("v no ids\n".encode())
     stream.write("v models none:[]\\n\n".encode())
-    stream.write("v models start:[\n".encode())
+    stream.write("v models start:[\\n\n".encode())
     stream.write("v models end:]\\n\n".encode())
-    stream.write("v model start:[\n".encode())
+    stream.write("v model start:    [\n".encode())
     stream.write("v model sep:,\n".encode())
-    stream.write("v model end:]\n".encode())
+    stream.write("v model end:]\\n\n".encode())
     stream.write("v lit start:\n".encode())
     stream.write("v lit sep:,\n".encode())
     stream.write("v lit end:\n".encode())
@@ -654,56 +654,56 @@ def isStable(e):
 # GR is contained in the intersection of PR, and ST is a subset of PR.
 # Hence, we first compute GR, then force truth of GR and enumerate PR.
 # For each extension in PR, stability is checked.
-def D3(print_only=False):
-    if print_only:
-        print("D3 is not solved with a single call.")
-        sys.exit()
-
-    solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1', '--no-pre'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    GR(solver.stdin)
-    post_process(solver.stdin)
-    close(solver.stdin)
-    gr = None
-    while True:
-        line = solver.stdout.readline()
-        if not line: break
-        assert gr is None
-        gr = line.decode().strip().split()
-
-    assert gr is not None
-    print('[', end='')
-    printModel(gr)
-    print('],', end='')
-    sys.stdout.flush()
-
-    solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    PR(solver.stdin)
-    for a in gr: solver.stdin.write((str(argToIdx[a]) + ' 0\n').encode())
-    post_process(solver.stdin)
-    close(solver.stdin)
-    print('[', end='')
-    count = 0
-    pr = []
-    while True:
-        line = solver.stdout.readline()
-        if not line: break
-        line = line.decode().strip().split()
-        if line:
-            pr.append(line)
-            if isStable(line):
-                if count != 0: print(',', end='')
-                count += 1
-                printModel(line)
-    print('],', end='')
-    sys.stdout.flush()
-
-    print('[', end='')
-    count = 0
-    for m in pr:
-        if count != 0: print(',', end='')
-        count += 1
-        printModel(m)
-    print(']')
+# def D3(print_only=False):
+#     if print_only:
+#         print("D3 is not solved with a single call.")
+#         sys.exit()
+#
+#     solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1', '--no-pre'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+#     GR(solver.stdin)
+#     post_process(solver.stdin)
+#     close(solver.stdin)
+#     gr = None
+#     while True:
+#         line = solver.stdout.readline()
+#         if not line: break
+#         assert gr is None
+#         gr = line.decode().strip().split()
+#
+#     assert gr is not None
+#     print('[', end='')
+#     printModel(gr)
+#     print('],', end='')
+#     sys.stdout.flush()
+#
+#     solver = subprocess.Popen([sol, '-n=0', '--circ-wit=1'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+#     PR(solver.stdin)
+#     for a in gr: solver.stdin.write((str(argToIdx[a]) + ' 0\n').encode())
+#     post_process(solver.stdin)
+#     close(solver.stdin)
+#     print('[', end='')
+#     count = 0
+#     pr = []
+#     while True:
+#         line = solver.stdout.readline()
+#         if not line: break
+#         line = line.decode().strip().split()
+#         if line:
+#             pr.append(line)
+#             if isStable(line):
+#                 if count != 0: print(',', end='')
+#                 count += 1
+#                 printModel(line)
+#     print('],', end='')
+#     sys.stdout.flush()
+#
+#     print('[', end='')
+#     count = 0
+#     for m in pr:
+#         if count != 0: print(',', end='')
+#         count += 1
+#         printModel(m)
+#     print(']')
 
 problemFunctions = {
     "DC-CO" : DC_CO, "DS-CO" : DS_CO, "SE-CO" : SE_CO, "EE-CO" : EE_CO,
@@ -713,7 +713,7 @@ problemFunctions = {
     "DC-STG" : DC_STG, "DS-STG" : DS_STG, "SE-STG" : SE_STG, "EE-STG" : EE_STG,
     "DC-GR" : DC_GR, "SE-GR" : SE_GR,
     "DC-ID" : DC_ID, "SE-ID" : SE_ID,
-    "D3": D3
+#    "D3": D3
 }
 
 
