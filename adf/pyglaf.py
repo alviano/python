@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-VERSION = "0.5"
+VERSION = "0.6"
 
 import argparse
 from collections import OrderedDict
@@ -40,11 +40,24 @@ argToIdx = {}
 att = OrderedDict()
 attR = OrderedDict()
 
-def attacked(b):
-    return len(arg)-1 + argToIdx[b]
+dynAtt = OrderedDict()
+dynAttList = []
 
-def inRange(b):
-    return 2*(len(arg)-1) + argToIdx[b]
+def x(name):
+    if name not in x.name2idx:
+        x.name2idx[name] = len(arg) + len(x.names)
+        x.names.append(name)
+        #print(x.name2idx[name],name)
+    return x.name2idx[name]
+x.name2idx = {}
+x.names = []
+
+def resolve(b): return b if isinstance(b, int) else argToIdx[b]
+def attacked(b): return x(('attacked', resolve(b)))
+def inRange(b): return x(('inRange', resolve(b)))
+def attack(a, b): return x(('attack', resolve(a), resolve(b)))
+def attackAndAttacker(a, b): return x(('attackAndAttacker', resolve(a), resolve(b)))
+def defended(a, b): return x(('defended', resolve(a), resolve(b)))
 
 def parseTGF(filename):
     sharp = False
@@ -87,7 +100,43 @@ def parseAPX(filename):
             attR[b].add(a)
 parseAPX.re_atom = re.compile('(?P<predicate>\w+)\s*\((?P<args>[\w,\s]+)\)\.')
 
+def parseTGFM(filename):
+    for line in fileinput.input(filename):
+        line = line.strip()
+        if not line: continue
+        sign = line[0] == '+'
+        (a, b) = line[1:].split()
+
+        dynAttList.append((sign, a, b))
+        if (a,b) not in dynAtt: dynAtt[(a,b)] = a in att and b in att[a]
+
+        if a not in att: att[a] = OrderedSet()
+        att[a].add(b)
+
+        if b not in attR: attR[b] = OrderedSet()
+        attR[b].add(a)
+
+def parseAPXM(filename):
+    for line in fileinput.input(filename):
+        res = parseAPXM.re_atom.match(line)
+        if not res: continue
+        sign = res.group('sign')
+        pred = res.group('predicate')
+        if pred == 'att':
+            (a, b) = [x.strip() for x in res.group('args').split(',')]
+
+            dynAttList.append((sign, a, b))
+            if (a,b) not in dynAtt: dynAtt[(a,b)] = a in att and b in att[a]
+
+            if a not in att: att[a] = OrderedSet()
+            att[a].add(b)
+
+            if b not in attR: attR[b] = OrderedSet()
+            attR[b].add(a)
+parseAPXM.re_atom = re.compile('(?P<sign>[+-])(?P<predicate>\w+)\s*\((?P<args>[\w,\s]+)\)\.')
+
 parseFunctions = {"tgf" : parseTGF, "apx" : parseAPX}
+parseDynFunctions = {"tgf" : parseTGFM, "apx" : parseAPXM}
 
 sol = None
 
@@ -101,7 +150,7 @@ def printAll(solver, end='\n'):
     while True:
         line = solver.stdout.readline()
         if not line: break
-        print(line.decode().strip(), end=end)
+        print(line.decode().rstrip(), end=end)
 
 def DS(solver):
     while True:
@@ -171,32 +220,43 @@ def DS_via_EE(solver, a):
 def conflictFree(stream):
     for a in att:
         for b in att[a]:
-            stream.write(("%d %d 0\n" % (-argToIdx[a], -argToIdx[b])).encode())
+            if (a,b) in dynAtt: stream.write(("%d %d %d 0\n" % (-attack(a, b), -argToIdx[a], -argToIdx[b])).encode())
+            else: stream.write(("%d %d 0\n" % (-argToIdx[a], -argToIdx[b])).encode())
 
-def conflictFreeViaAttacked(stream):
-    for a in arg[1:]:
-        stream.write(("%d %d 0\n" % (-attacked(a), -argToIdx[a])).encode())
+# def conflictFreeViaAttacked(stream):
+#     for a in arg[1:]:
+#         stream.write(("%d %d 0\n" % (-attacked(a), -argToIdx[a])).encode())
 
 def buildAttacked(stream):
     for b in arg[1:]:
         cl = [str(-attacked(b))]
         if b in attR:
             for c in attR[b]:
-                cl.append(str(argToIdx[c]))
-                stream.write(("%d %d 0\n" % (-argToIdx[c], attacked(b))).encode())
+                if (c,b) in dynAtt:
+                    cl.append(str(attackAndAttacker(c, b)))
+                    stream.write(("%d %d 0\n" % (-attackAndAttacker(c, b), attacked(b))).encode())
+                else:
+                    cl.append(str(argToIdx[c]))
+                    stream.write(("%d %d 0\n" % (-argToIdx[c], attacked(b))).encode())
         stream.write((' '.join(cl) + ' 0\n').encode())
 
 def admissible(stream):
     for b in att:
         for a in att[b]:
-            stream.write(("%d %d 0\n" % (-argToIdx[a], attacked(b))).encode())
+            if (b,a) in dynAtt:
+                stream.write(("%d %d %d 0\n" % (-attack(b, a), -argToIdx[a], attacked(b))).encode())
+            else:
+                stream.write(("%d %d 0\n" % (-argToIdx[a], attacked(b))).encode())
 
 def complete(stream):
     for a in arg[1:]:
         cl = [str(argToIdx[a])]
         if a in attR:
             for b in attR[a]:
-                cl.append(str(-attacked(b)))
+                if (b,a) in dynAtt:
+                    cl.append(str(-defended(b, a)))
+                else:
+                    cl.append(str(-attacked(b)))
         stream.write((' '.join(cl) + ' 0\n').encode())
 
 def stable(stream):
@@ -204,7 +264,10 @@ def stable(stream):
         cl = [str(argToIdx[a])]
         if a in attR:
             for b in attR[a]:
-                cl.append(str(argToIdx[b]))
+                if (b,a) in dynAtt:
+                    cl.append(str(attackAndAttacker(b, a)))
+                else:
+                    cl.append(str(argToIdx[b]))
         stream.write((' '.join(cl) + ' 0\n').encode())
 
 def buildRange(stream):
@@ -213,20 +276,72 @@ def buildRange(stream):
         #stream.write(('%d %d 0\n' % (inRange(a), -argToIdx[a])).encode())
         if a in attR:
             for b in attR[a]:
-                cl.append(str(argToIdx[b]))
+                if (b,a) in dynAtt:
+                    cl.append(str(attackAndAttacker(b, a)))
+                else:
+                    cl.append(str(argToIdx[b]))
                 #stream.write(('%d %d 0\n' % (inRange(a), -argToIdx[b])).encode())
         stream.write((' '.join(cl) + ' 0\n').encode())
 
-def buildRangeViaAttacked(stream):
-    for a in arg[1:]:
-        cl = [str(-inRange(a)), str(argToIdx[a]), str(attacked(a))]
-        stream.write((' '.join(cl) + ' 0\n').encode())
+# def buildRangeViaAttacked(stream):
+#     for a in arg[1:]:
+#         cl = [str(-inRange(a)), str(argToIdx[a]), str(attacked(a))]
+#         stream.write((' '.join(cl) + ' 0\n').encode())
+
+def buildAttackAndAttacked(stream):
+    for (a,b) in dynAtt:
+        stream.write(("%d %d 0\n" % (-attackAndAttacker(a, b), attack(a, b))).encode())
+        stream.write(("%d %d 0\n" % (-attackAndAttacker(a, b), argToIdx[a])).encode())
+        stream.write(("%d %d %d 0\n" % (attackAndAttacker(a, b), -attack(a, b), -argToIdx[a])).encode())
+
+def buildDefended(stream):
+    for (a,b) in dynAtt:
+        stream.write(("%d %d %d 0\n" % (-defended(a, b), -attack(a, b), attacked(a))).encode())
+        stream.write(("%d %d 0\n" % (defended(a, b), attack(a, b))).encode())
+        stream.write(("%d %d 0\n" % (defended(a, b), -attacked(a))).encode())
+
+def buildAssumptions(stream):
+    if not dynAttList: return
+
+    state = OrderedDict(dynAtt)
+    last = {}
+
+    i = 0
+    for (s,a,b) in dynAttList:
+        i += 1
+        last[(a,b)] = i
+
+    ass = []
+    for (a,b) in state:
+        ass.append(str(attack(a, b) if state[(a,b)] else -attack(a, b)))
+    stream.write(("s %s 0\n" % (' '.join(ass))).encode())
+
+    i = 0
+    for (s,a,b) in dynAttList:
+        i += 1
+        state[(a,b)] = s
+
+        if last[(a,b)] == i:
+            stream.write(("a %d 0\n" % (attack(a, b) if state[(a,b)] else -attack(a, b))).encode())
+            del state[(a,b)]
+
+        ass = []
+        for (a,b) in state:
+            ass.append(str(attack(a, b) if state[(a,b)] else -attack(a, b)))
+        stream.write(("s %s 0\n" % (' '.join(ass))).encode())
+
 
 def credulous(stream, a):
     stream.write(("q %d\n" % (argToIdx[a],)).encode())
     stream.write("v no ids\n".encode())
-    stream.write("v models none:NO\\n\n".encode())
-    stream.write("v models start:YES\\n\n".encode())
+    stream.write("v iterations start:{}\n".format('[' if dynAttList else '').encode())
+    stream.write("v iterations end:{}\\n\n".format(']' if dynAttList else '').encode())
+    stream.write("v iteration start:\n".encode())
+    stream.write("v iteration sep:, \n".encode())
+    stream.write("v iteration end:\n".encode())
+    stream.write("v models unknown:\n".encode())
+    stream.write("v models none:NO\n".encode())
+    stream.write("v models start:YES\n".encode())
     stream.write("v models end:\n".encode())
     stream.write("v model start:\n".encode())
     stream.write("v model sep:\n".encode())
@@ -238,8 +353,14 @@ def credulous(stream, a):
 def skeptical(stream, a):
     stream.write(("q -%d\n" % (argToIdx[a],)).encode())
     stream.write("v no ids\n".encode())
-    stream.write("v models none:YES\\n\n".encode())
-    stream.write("v models start:NO\\n\n".encode())
+    stream.write("v iterations start:{}\n".format('[' if dynAttList else '').encode())
+    stream.write("v iterations end:{}\\n\n".format(']' if dynAttList else '').encode())
+    stream.write("v iteration start:\n".encode())
+    stream.write("v iteration sep:, \n".encode())
+    stream.write("v iteration end:\n".encode())
+    stream.write("v models unknown:\n".encode())
+    stream.write("v models none:YES\n".encode())
+    stream.write("v models start:NO\n".encode())
     stream.write("v models end:\n".encode())
     stream.write("v model start:\n".encode())
     stream.write("v model sep:\n".encode())
@@ -251,11 +372,17 @@ def skeptical(stream, a):
 def single(stream):
     nameTable(stream)
     stream.write("v no ids\n".encode())
-    stream.write("v models none:NO\\n\n".encode())
+    stream.write("v iterations start:{}\n".format('[\\n' if dynAttList else '').encode())
+    stream.write("v iterations end:{}\\n\n".format('\\n]' if dynAttList else '').encode())
+    stream.write("v iteration start:{}\n".format('    ' if dynAttList else '').encode())
+    stream.write("v iteration sep:\\n\n".encode())
+    stream.write("v iteration end:\n".encode())
+    stream.write("v models unknown:\n".encode())
+    stream.write("v models none:{}\n".format('[]' if dynAttList else 'NO').encode())
     stream.write("v models start:\n".encode())
-    stream.write("v models end:\\n\n".encode())
+    stream.write("v models end:\n".encode())
     stream.write("v model start:[\n".encode())
-    stream.write("v model sep:,\n".encode())
+    stream.write("v model sep:\n".encode())
     stream.write("v model end:]\n".encode())
     stream.write("v lit start:\n".encode())
     stream.write("v lit sep:,\n".encode())
@@ -264,11 +391,17 @@ def single(stream):
 def enumerate(stream):
     nameTable(stream)
     stream.write("v no ids\n".encode())
-    stream.write("v models none:[]\\n\n".encode())
-    stream.write("v models start:[\\n\n".encode())
-    stream.write("v models end:]\\n\n".encode())
-    stream.write("v model start:    [\n".encode())
-    stream.write("v model sep:,\n".encode())
+    stream.write("v iterations start:{}\n".format('[\\n' if dynAttList else '').encode())
+    stream.write("v iterations end:{}\\n\n".format('\\n]' if dynAttList else '').encode())
+    stream.write("v iteration start:\n".encode())
+    stream.write("v iteration sep:\\n\n".encode())
+    stream.write("v iteration end:\n".encode())
+    stream.write("v models unknown:\n".encode())
+    stream.write("v models none:[]\n".encode())
+    stream.write("v models start:{}[\\n\n".format('    ' if dynAttList else '').encode())
+    stream.write("v models end:{}]\n".format('    ' if dynAttList else '').encode())
+    stream.write("v model start:{}    [\n".format('    ' if dynAttList else '').encode())
+    stream.write("v model sep:\n".encode())
     stream.write("v model end:]\\n\n".encode())
     stream.write("v lit start:\n".encode())
     stream.write("v lit sep:,\n".encode())
@@ -277,6 +410,11 @@ def enumerate(stream):
 def post_process(stream):
     nameTable(stream)
     stream.write("v no ids\n".encode())
+    stream.write("v iterations start:{}\n".format('[' if dynAttList else '').encode())
+    stream.write("v iterations end:{}\\n\n".format(']' if dynAttList else '').encode())
+    stream.write("v iteration start:\n".encode())
+    stream.write("v iteration sep:\\n\n".encode())
+    stream.write("v iteration end:\n".encode())
     stream.write("v models none:\\n\n".encode())
     stream.write("v models start:\n".encode())
     stream.write("v models end:\\n\n".encode())
@@ -301,6 +439,9 @@ def CO(stream):
     buildAttacked(stream)
     admissible(stream)
     complete(stream)
+    buildAttackAndAttacked(stream)
+    buildDefended(stream)
+    buildAssumptions(stream)
 
 def ST(stream):
     preamble(stream)
@@ -309,6 +450,9 @@ def ST(stream):
     admissible(stream)
     complete(stream)
     stable(stream)
+    buildAttackAndAttacked(stream)
+    buildDefended(stream)
+    buildAssumptions(stream)
 
 def PR(stream):
     preamble(stream, range(1, len(arg)))
@@ -316,6 +460,9 @@ def PR(stream):
     buildAttacked(stream)
     admissible(stream)
     complete(stream)
+    buildAttackAndAttacked(stream)
+    buildDefended(stream)
+    buildAssumptions(stream)
 
 def GR(stream):
     preamble(stream, [-x for x in range(1, len(arg))])
@@ -323,6 +470,9 @@ def GR(stream):
     buildAttacked(stream)
     admissible(stream)
     complete(stream)
+    buildAttackAndAttacked(stream)
+    buildDefended(stream)
+    buildAssumptions(stream)
 
 def SST(stream):
     preamble(stream, [inRange(i) for i in arg[1:]])
@@ -331,11 +481,17 @@ def SST(stream):
     admissible(stream)
     complete(stream)
     buildRange(stream)
+    buildAttackAndAttacked(stream)
+    buildDefended(stream)
+    buildAssumptions(stream)
 
 def STG(stream):
     preamble(stream, [inRange(i) for i in arg[1:]])
     conflictFree(stream)
     buildRange(stream)
+    buildAttackAndAttacked(stream)
+    buildDefended(stream)
+    buildAssumptions(stream)
 
 def close(stream):
     stream.write('n 0\n'.encode())
@@ -544,7 +700,8 @@ def EE_STG(print_only=False):
 def DC_GR(a, print_only=False):
     stream = sys.stdout.buffer
     if not print_only:
-        solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1', '--no-pre'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        #solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1', '--no-pre'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        solver = subprocess.Popen([sol, '--circ-propagate'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         stream = solver.stdin
     GR(stream)
     credulous(stream, a)
@@ -554,7 +711,8 @@ def DC_GR(a, print_only=False):
 def SE_GR(end='\n', print_only=False):
     stream = sys.stdout.buffer
     if not print_only:
-        solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1', '--no-pre'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        #solver = subprocess.Popen([sol, '-n=1', '--circ-wit=1', '--no-pre'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        solver = subprocess.Popen([sol, '--circ-propagate'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         stream = solver.stdin
     GR(stream)
     single(stream)
@@ -713,7 +871,15 @@ problemFunctions = {
     "DC-STG" : DC_STG, "DS-STG" : DS_STG, "SE-STG" : SE_STG, "EE-STG" : EE_STG,
     "DC-GR" : DC_GR, "SE-GR" : SE_GR,
     "DC-ID" : DC_ID, "SE-ID" : SE_ID,
+
 #    "D3": D3
+
+    "DC-CO-D" : DC_CO, "DS-CO-D" : DS_CO, "SE-CO-D" : SE_CO, "EE-CO-D" : EE_CO,
+    "DC-PR-D" : DC_PR, "DS-PR-D" : DS_PR, "SE-PR-D" : SE_PR, "EE-PR-D" : EE_PR,
+    "DC-ST-D" : DC_ST, "DS-ST-D" : DS_ST, "SE-ST-D" : SE_ST, "EE-ST-D" : EE_ST,
+    #"DC-SST-D" : DC_SST, "DS-SST-D" : DS_SST, "SE-SST-D" : SE_SST, "EE-SST-D" : EE_SST,
+    #"DC-STG-D" : DC_STG, "DS-STG-D" : DS_STG, "SE-STG-D" : SE_STG, "EE-STG-D" : EE_STG,
+    "DC-GR-D" : DC_GR, "SE-GR-D" : SE_GR,
 }
 
 
@@ -726,6 +892,7 @@ def parseArguments():
     parser.add_argument('--problems', action='store_true', help='print supported computational problems and exit')
     parser.add_argument('-p', metavar='<task>', type=str, help='')
     parser.add_argument('-f', metavar='<file>', type=str, help='')
+    parser.add_argument('-m', metavar='<file>', type=str, help='')
     parser.add_argument('-fo', metavar='<fileformat>', type=str, help='')
     parser.add_argument('-a', metavar='<additional_parameter>', type=str, help='')
     parser.add_argument('--circ', metavar='<file>', type=str, help='path to circumscriptino (default is circumscriptino-static in the script directory)')
@@ -754,11 +921,15 @@ if __name__ == "__main__":
     if args.fo is None: sys.exit("Please, specify a format.")
     if args.p is None: sys.exit("Please, specify a problem.")
     if args.f is None: sys.exit("Please, specify an input file.")
+    if args.p[-2:] == '-D':
+        if args.m is None: sys.exit("Please, specify an input file (for dynamic changes).")
+    elif args.m is not None: sys.exit("Option -m can be used only with dynamic problems.")
 
     if not args.fo in parseFunctions: sys.exit("Unsopported format: " + args.fo)
     if not args.p in problemFunctions: sys.exit("Unsopported problem: " + args.p)
 
     parseFunctions[args.fo](args.f)
+    if args.m: parseDynFunctions[args.fo](args.m)
     if args.a:
         problemFunctions[args.p](args.a, print_only=args.print_circ)
     else:
