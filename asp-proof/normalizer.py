@@ -47,7 +47,7 @@ def minimize_rule(x):
     return x
 
 def isUnit(x):
-    return x[1][0] == '1'
+    return x[1][0] == '1' or x[1][0] == '0'
 
 def print_definition(head, body):
     if body[0] == RuleType.NORMAL_RULE:

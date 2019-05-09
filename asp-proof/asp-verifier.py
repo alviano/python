@@ -27,7 +27,10 @@ verbatim = []
 next_var = 0
 
 clauses = []
-watched = OrderedDict()
+watched = {}
+
+wc = []
+in_wc = {}
 
 assigned = {}
 assigned_trail = [-1]
@@ -107,9 +110,12 @@ def readVerbatim(line):
     verbatim.append(line)
 
 def checkProgram():
-    if verbatim != [
-        ['0'], ['3', 'd'], ['2', 'c'], ['5', 'b'], ['4', 'a'], ['0'], ['B+'], ['0'], ['B-'], ['1'], ['0'], ['1']
-    ]:
+    lastPart = 0
+    for i in range(1, len(verbatim)):
+        if verbatim[i] == ['0']:
+            lastPart = i
+            break
+    if verbatim[lastPart:] != [['0'], ['B+'], ['0'], ['B-'], ['1'], ['0'], ['1']]:
         exit("Cannot process this program because I cannot understand the last part of the lparse program (this is a prototype tool and supports just a fragment of lparse format).")
 
     global next_var
@@ -175,6 +181,16 @@ def add_implication(atom, body):
     lits = bodyToLits(body)
     for x in lits: clauses.append([-atom, x])
 
+def add_cc(head, body):
+    #lits = bodyToLits(body[:2,3:])
+    pass
+
+def add_wc(head, body):
+    pass
+
+def add_wc_(head, lits, weights, bound):
+    pass
+
 def computeCompletion():
     global next_var
 
@@ -188,9 +204,9 @@ def computeCompletion():
             elif definition[x][0][0] == RuleType.CHOICE_RULE:
                 add_implication(int(x), [int(x) for x in definition[x][0][1]])
             elif definition[x][0][0] == RuleType.CARDINALITY_RULE:
-                pass
+                add_cc(int(x), [int(x) for x in definition[x][0][1]])
             elif definition[x][0][0] == RuleType.WEIGHT_RULE:
-                pass
+                add_wc(int(x), [int(x) for x in definition[x][0][1]])
         else:
             supp = [-int(x)]
             for d in definition[x]:
@@ -212,6 +228,8 @@ def attachClauses():
     for i in range(1, next_var):
         watched[i] = []
         watched[-i] = []
+        in_wc[i] = []
+        in_wc[-i] = []
     for i in range(len(clauses)):
         clause = clauses[i]
         assert len(clause) > 0
@@ -220,6 +238,9 @@ def attachClauses():
         else:
             watched[-clause[0]].append(i)
             watched[-clause[1]].append(i)
+    for i in range(len(wc)):
+        w = wc[i]
+        #TODO
 
 def addAndAttachClause(lits):
     global box_derived
@@ -256,6 +277,8 @@ def checkExtension(atom, lits):
     assigned[atom] = TruthValue.UNDEF
     watched[atom] = []
     watched[-atom] = []
+    in_wc[atom] = []
+    in_wc[-atom] = []
 
     if [x for x in lits if isFalse(x)]:
         assigned_trail.append(-atom)
@@ -275,8 +298,7 @@ def checkExtension(atom, lits):
         watched[-clause[i][1]].append(i)
 
 def checkDeletion(nogood):
-    # just ignore this for now
-    pass
+    print("Deltions are ignored for now")
 
 def getExternal(body, loop):
     if body[0] == RuleType.NORMAL_RULE or body[0] == RuleType.CHOICE_RULE:
