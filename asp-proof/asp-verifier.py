@@ -30,13 +30,14 @@ clauses = []
 watched = {}
 
 wc = []
-in_wc = {}
+watched_wc = {}
 
 assigned = {}
 assigned_trail = [-1]
 next_to_propagate = 0
 
 box_derived = False
+box_in_trail = False
 
 def isTrue(lit):
     if lit > 0: return assigned[lit] == TruthValue.TRUE
@@ -131,6 +132,9 @@ def propagate(assumptions=[]):
     global next_to_propagate
     global assigned
     global assigned_trail
+    global box_in_trail
+
+    if box_in_trail: return False
 
     assigned_len = len(assigned_trail)
     assigned_trail.extend(assumptions)
@@ -158,12 +162,26 @@ def propagate(assumptions=[]):
                 if isFalse(clause[1]):
                     assigned_trail.append(clause[0])
             watched[-clause[1]].append(i)
+
+        for i in watched_wc[lit]:
+            wconstraint = wc[i[0]]
+            wconstraint[1] -= i[1]
+            for wlit in wconstraint[0]:
+                if not isTrue(wlit[0]) and wlit[1] > wconstraint[1]:
+                    assigned_trail.append(wlit[0])
+
         next_to_propagate += 1
 
     if len(assumptions) > 0:
-        for x in assigned_trail[assigned_len:next_to_propagate]: assigned[abs(x)] = TruthValue.UNDEF
+        for x in assigned_trail[assigned_len:next_to_propagate]:
+            assigned[abs(x)] = TruthValue.UNDEF
+            for i in watched_wc[x]:
+                wconstraint = wc[i[0]]
+                wconstraint[1] += i[1]
         assigned_trail = assigned_trail[:assigned_len]
         next_to_propagate = len(assigned_trail)
+    elif not res:
+        box_in_trail = True
 
     return res
 
@@ -182,14 +200,21 @@ def add_implication(atom, body):
     for x in lits: clauses.append([-atom, x])
 
 def add_cc(head, body):
-    #lits = bodyToLits(body[:2,3:])
-    pass
+    lits = bodyToLits([body[i] for i in range(len(body)) if i != 2])
+    add_wc_(head, lits, [1 for x in lits], body[2])
 
 def add_wc(head, body):
-    pass
+    lits = bodyToLits(body[1:3+body[1]])
+    add_wc_(head, lits, body[3+body[1]:], body[0])
 
 def add_wc_(head, lits, weights, bound):
-    pass
+    wlits = [(-head, bound)]
+    for i in range(len(lits)): wlits.append((lits[i], weights[i]))
+    wc.append([wlits, sum(weights)])
+
+    wlits = [(head, sum(weights) - bound + 1)]
+    for i in range(len(lits)): wlits.append((-lits[i], weights[i]))
+    wc.append([wlits, sum(weights)])
 
 def computeCompletion():
     global next_var
@@ -228,8 +253,8 @@ def attachClauses():
     for i in range(1, next_var):
         watched[i] = []
         watched[-i] = []
-        in_wc[i] = []
-        in_wc[-i] = []
+        watched_wc[i] = []
+        watched_wc[-i] = []
     for i in range(len(clauses)):
         clause = clauses[i]
         assert len(clause) > 0
@@ -239,8 +264,8 @@ def attachClauses():
             watched[-clause[0]].append(i)
             watched[-clause[1]].append(i)
     for i in range(len(wc)):
-        w = wc[i]
-        #TODO
+        wlits = wc[i][0]
+        for wlit in wlits: watched_wc[-wlit[0]].append((i, wlit[1]))
 
 def addAndAttachClause(lits):
     global box_derived
@@ -277,8 +302,8 @@ def checkExtension(atom, lits):
     assigned[atom] = TruthValue.UNDEF
     watched[atom] = []
     watched[-atom] = []
-    in_wc[atom] = []
-    in_wc[-atom] = []
+    watched_wc[atom] = []
+    watched_wc[-atom] = []
 
     if [x for x in lits if isFalse(x)]:
         assigned_trail.append(-atom)
