@@ -222,7 +222,7 @@ def computeCompletion():
     for x in range(1, next_var):
         x = str(x)
         if x not in definition or len(definition[x]) == 0:
-            assigned_trail.append(-x)
+            assigned_trail.append(-int(x))
         elif len(definition[x]) == 1:
             if definition[x][0][0] == RuleType.NORMAL_RULE:
                 add_definition(int(x), [int(x) for x in definition[x][0][1]])
@@ -319,8 +319,8 @@ def checkExtension(atom, lits):
     clauses_len = len(clauses)
     add_definition(atom, lits)
     for i in range(clauses_len, len(clauses)):
-        watched[-clause[i][0]].append(i)
-        watched[-clause[i][1]].append(i)
+        watched[-clauses[i][0]].append(i)
+        watched[-clauses[i][1]].append(i)
 
 def checkDeletion(nogood):
     print("Deltions are ignored for now")
